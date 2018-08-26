@@ -11,7 +11,8 @@
 #pragma resource "*.dfm"
 
 // By Scott M. Swift www.yahcolorize.com,
-// dxzl@live.com June. 15, 2017
+// dxzl@live.com June 15, 2017
+// Version 1.1 August 26, 2018
 
 TFormMain *FormMain;
 
@@ -27,7 +28,20 @@ __fastcall TFormMain::TFormMain(TComponent* Owner)
   ::DragAcceptFiles(this->Handle, true);
 }
 //---------------------------------------------------------------------------
-void __fastcall TFormMain::ButtonChangePathClick(TObject *Sender)
+void __fastcall TFormMain::FormShow(TObject *Sender)
+{
+  String s = "FIRST: Make a backup of your .wlmp Windows Movie Maker project file!\n\n"
+    "Follow the steps on the buttons, 1,2,3,4.\n\n"
+    "(Hint: For steps 1  and 2 you can also drag-drop, first your project-file,\n"
+    "then the folder with your movie and image files to this window. Always drag\n"
+    "the project file first then the folder that has your video clips. Finally,\n"
+    "press \"Apply new root-project path\", do any necessary manual editing in\n"
+    "the window and press \"Save file\")\n\n"
+    "Cheers, Scott Swift (dxzl@live.com)";
+  Memo1->Lines->Text = s;
+}
+//---------------------------------------------------------------------------
+void __fastcall TFormMain::ButtonApplyNewRootPathClick(TObject *Sender)
 {
 
   try
@@ -62,14 +76,23 @@ void __fastcall TFormMain::ButtonChangePathClick(TObject *Sender)
 //      String FilePath = ExtractFilePath(OldPath);
       String sRemainingPath = OldPath.SubString(lenOldCommonPath+1, OldPath.Length());
 
-
-      // replace oldpath with newpath
+      // check backslash char in GNewPath
       int npLen = GNewPath.Length();
       if (npLen && GNewPath[npLen] != '\\')
         GNewPath += '\\';
+
+      // Need to remove the first subdirectory if it does not exist...
+      // It's being replaced with the new folder we drag-dropped...
+      // So if there is a '\', remove text up to and including the first one
+      int Pos2 = sRemainingPath.Pos("\\");
+      if (Pos2 != 0)
+        if (!DirectoryExists(ExtractFilePath(GNewPath + sRemainingPath)))
+          sRemainingPath = sRemainingPath.SubString(Pos2+1, sRemainingPath.Length()-Pos2);
+
+      // replace oldpath with newpath
       String NewStr = OldStr.SubString(1, Pos1+10-1) + GNewPath + sRemainingPath;
 
-      // add the rest of the line
+      // add the rest of the original line
       for (; jj <= len; jj++)
         NewStr += OldStr[jj];
 
@@ -309,16 +332,16 @@ void __fastcall TFormMain::WMDropFile(TWMDropFiles &Msg)
             {
                 String sFile = String(wFile); // convert to utf-8 internal string
 
-                if (FileExists(sFile))
+                if (FileExists(sFile)) // is it a file? (then must be the project-file!)
                 {
                     GDragDropPath = sFile;
                     GbIsDirectory = false;
                 }
-                else
+                else // is it a directory? (then must be the folder that has our photos and video clips!)
                 {
                   if (DirectoryExists(sFile))
                   {
-                    GDragDropPath = sFile;
+                    GDragDropPath = sFile + '\\';
                     GbIsDirectory = true;
                   }
                 }
@@ -345,11 +368,13 @@ void __fastcall TFormMain::Timer1FileDropTimeout(TObject *Sender)
     Timer1->Enabled = false;
     if (GbIsDirectory)
     {
+      // handle drag-drop of the folder with video clips and photos
       GNewPath = GDragDropPath;
       Edit1->Text = GNewPath;
     }
     else
     {
+      // handle drag-drop of the .wlmp movie project-file
       GFileName = GDragDropPath;
       LoadFile();
     }

@@ -42,7 +42,7 @@ __published:  // IDE-managed Components
   TButton *ButtonReadProjectFile;
   TOpenDialog *OpenDialog1;
   TMemo *Memo1;
-  TButton *ButtonChangePath;
+  TButton *ButtonApplyNewRootPath;
   TButton *ButtonAbout;
   TButton *ButtonSaveFile;
   TSaveDialog *SaveDialog1;
@@ -53,12 +53,13 @@ __published:  // IDE-managed Components
   TButton *ButtonSelectRootFolder;
   TTimer *Timer1;
   void __fastcall ButtonReadProjectFileClick(TObject *Sender);
-  void __fastcall ButtonChangePathClick(TObject *Sender);
+  void __fastcall ButtonApplyNewRootPathClick(TObject *Sender);
   void __fastcall ButtonAboutClick(TObject *Sender);
   void __fastcall Edit1Change(TObject *Sender);
   void __fastcall ButtonSaveFileClick(TObject *Sender);
   void __fastcall ButtonSelectRootFolderClick(TObject *Sender);
   void __fastcall Timer1FileDropTimeout(TObject *Sender);
+  void __fastcall FormShow(TObject *Sender);
 protected:
   void __fastcall WMDropFile(TWMDropFiles &Msg);
 
