@@ -13,6 +13,7 @@
 // By Scott M. Swift www.yahcolorize.com,
 // dxzl@live.com June 15, 2017
 // Version 1.1 August 26, 2018
+// Version 1.2 March 11, 2019
 
 TFormMain *FormMain;
 
@@ -89,8 +90,43 @@ void __fastcall TFormMain::ButtonApplyNewRootPathClick(TObject *Sender)
         if (!DirectoryExists(ExtractFilePath(GNewPath + sRemainingPath)))
           sRemainingPath = sRemainingPath.SubString(Pos2+1, sRemainingPath.Length()-Pos2);
 
+      String sTempPath = GNewPath;
+
+      if (!FileExists(GNewPath + sRemainingPath))
+      {
+        // ShowMessage("file missing: " + GNewPath + sRemainingPath);
+
+        // if we can't find the file in the new location drag-dropped folder...
+        // maybe it's in the root level...
+        int len = GNewPath.Length();
+        if (len > 0 && GNewPath[len] == '\\')
+        {
+          int jj;
+          int iEnd = 0;
+          for (jj = len-1; jj > 0; jj--)
+          {
+            if (GNewPath[jj] == '\\')
+            {
+              iEnd = jj;
+              break;
+            }
+          }
+
+          // quick and dirty attempt to just find the file one level up from the
+          // drag-dropped folder
+          if (iEnd > 0)
+          {
+            sTempPath = GNewPath.SubString(1, iEnd);
+
+            //if (FileExists(GNewPath + sRemainingPath))
+            //  ShowMessage("file now found at: " + GNewPath + sRemainingPath);
+          }
+        }
+      }
+
       // replace oldpath with newpath
-      String NewStr = OldStr.SubString(1, Pos1+10-1) + GNewPath + sRemainingPath;
+      String NewStr = OldStr.SubString(1, Pos1+10-1) + sTempPath + sRemainingPath;
+
 
       // add the rest of the original line
       for (; jj <= len; jj++)
@@ -403,5 +439,112 @@ void __fastcall TFormMain::LoadFile(void)
 
   Memo1->SetFocus();
 }
+//---------------------------------------------------------------------------
+//!!!!!!!!! TODO: I want to add the ability for the program to recurse through subfolders
+// to find movie clips/photos
+//void __fastcall TFormMain::RecurseFileAdd(TStringList* slFiles)
+//// Uses the WideString versions of the Win32 API FindFirstFile and FindNextFile directly
+//// and converts the resulting paths to UTF-8 for storage in an ordinary TStringList
+////
+//// Use SetCurrentDirectory() to set our root directory or TOpenDialog sets it also...
+//{
+//  Application->ProcessMessages();
+//
+//  if (slFiles == NULL) return;
+//
+//  TStringList* slSubDirs = new TStringList();
+//  if (slSubDirs == NULL) return;
+//
+//  TWin32FindDataW sr;
+//  HANDLE hFind = NULL;
+//  TFindexInfoLevels l = FindExInfoStandard; // FindExInfoBasic was defined later!
+//  TFindexSearchOps s = FindExSearchLimitToDirectories;
+//
+//  try
+//  {
+//    hFind = FindFirstFileExW(L"*", l, &sr, s, NULL, (DWORD)FIND_FIRST_EX_LARGE_FETCH);
+//
+//    // Get list of subdirectories into a stringlist
+//    if (hFind != INVALID_HANDLE_VALUE)
+//    {
+//      do
+//      {
+//        if ((sr.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0)
+//        {
+//          int len = wcslen(sr.cFileName);
+//
+//          if (len == 1 && sr.cFileName[0] == L'.')
+//            continue;
+//          if (len == 2 && sr.cFileName[0] == L'.' && sr.cFileName[1] == L'.')
+//            continue;
+//
+////          slSubDirs->Add(WideToUtf8(WideString(sr.cFileName)));
+//          slSubDirs->Add(sr.cFileName);
+//        }
+//      } while (FindNextFileW(hFind, &sr) == TRUE);
+//    }
+//  }
+//  __finally
+//  {
+//    try { if (hFind != NULL) FindClose(hFind); } catch(...) {}
+//  }
+//
+//  AddFilesToStringList(slFiles);
+//
+//  // Get songs in all subdirectories
+//  for (int ii = 0; ii < slSubDirs->Count; ii++)
+//  {
+//    Application->ProcessMessages();
+//    if (Application->Terminated || (int)GetAsyncKeyState(VK_ESCAPE) < 0)
+//      break;
+//
+//    if (SetCurrentDirectoryW(slSubDirs->Strings[ii].w_str()))
+//    {
+//      RecurseFileAdd(slFiles);
+//      SetCurrentDirectoryW(L"..");
+//    }
+//  }
+//
+//  delete slSubDirs;
+//}
+////---------------------------------------------------------------------------
+//void __fastcall TFormMain::AddFilesToStringList(TStringList* slFiles)
+//// slFiles is in UTF-8!
+//{
+//  TWin32FindDataW sr;
+//  HANDLE hFind = NULL;
+//  TFindexInfoLevels l = FindExInfoStandard; // FindExInfoBasic was defined later!
+//  TFindexSearchOps s = FindExSearchNameMatch;
+//
+//  try
+//  {
+//    // Get the current directory
+//    String wdir = GetCurrentDir();
+//
+//    hFind = FindFirstFileExW(L"*", l, &sr, s, NULL, (DWORD)FIND_FIRST_EX_LARGE_FETCH);
+//
+//    // Get list of files into a stringlist
+//    if (hFind != INVALID_HANDLE_VALUE)
+//    {
+//      String ws;
+//
+//      // Don't add these file-types...
+//      int mask = FILE_ATTRIBUTE_DIRECTORY|FILE_ATTRIBUTE_SYSTEM|FILE_ATTRIBUTE_HIDDEN;
+//
+//      do
+//      {
+//        if ((sr.dwFileAttributes & mask) == 0)
+//        {
+//          ws = wdir + L"\\" + sr.cFileName;
+//          slFiles->Add(ws);
+//        }
+//      } while (FindNextFileW(hFind, &sr) == TRUE);
+//    }
+//  }
+//  __finally
+//  {
+//    try { if (hFind != NULL) ::FindClose(hFind); } catch(...) {}
+//  }
+//}
 //---------------------------------------------------------------------------
 

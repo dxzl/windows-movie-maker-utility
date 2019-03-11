@@ -74,6 +74,8 @@ private:  // User declarations
   String __fastcall GetCommonPath();
   String __fastcall GetSpecialFolder(int csidl);
   void __fastcall LoadFile(void);
+  void __fastcall AddFilesToStringList(TStringList* slFiles);
+  void __fastcall RecurseFileAdd(TStringList* slFiles);
 
   bool bServersProcessed, GbIsDirectory;
   String GFileName, GNewPath, GOldCommonPath, GDragDropPath;
