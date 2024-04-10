@@ -21,9 +21,9 @@ TFormMain *FormMain;
 __fastcall TFormMain::TFormMain(TComponent* Owner)
   : TForm(Owner)
 {
-  GNewPath = DEFAULT_PATH;
-  Edit1->Text = GNewPath;
-  GFileName = "save1.txt";
+  GProjectFilePath = DEFAULT_PATH;
+  Edit1->Text = GProjectFilePath;
+  GProjectFileName = "save1.txt";
 
   //enable drag&drop files
   ::DragAcceptFiles(this->Handle, true);
@@ -35,7 +35,7 @@ void __fastcall TFormMain::FormShow(TObject *Sender)
     "Follow the steps on the buttons, 1,2,3,4.\n\n"
     "(Hint: For steps 1  and 2 you can also drag-drop, first your project-file,\n"
     "then the folder with your movie and image files to this window. Always drag\n"
-    "the project file first then the folder that has your video clips. Finally,\n"
+    "the project file first then the folder that has your movie and image files. Finally,\n"
     "press \"Apply new root-project path\", do any necessary manual editing in\n"
     "the window and press \"Save file\")\n\n"
     "Cheers, Scott Swift (dxzl@live.com)";
@@ -44,6 +44,11 @@ void __fastcall TFormMain::FormShow(TObject *Sender)
 //---------------------------------------------------------------------------
 void __fastcall TFormMain::ButtonApplyNewRootPathClick(TObject *Sender)
 {
+  if (GProjectFilePath.IsEmpty())
+    return;
+
+  // add trailing delimeter in GProjectFilePath
+  GProjectFilePath = IncludeTrailingPathDelimiter(GProjectFilePath);
 
   try
   {
@@ -73,39 +78,36 @@ void __fastcall TFormMain::ButtonApplyNewRootPathClick(TObject *Sender)
       if (jj > len) // no trailing quote, continue
         continue;
 
+      OldPath = XmlDecode(OldPath);
+
 //      String FileName = ExtractFileName(OldPath);
 //      String FilePath = ExtractFilePath(OldPath);
       String sRemainingPath = OldPath.SubString(lenOldCommonPath+1, OldPath.Length());
-
-      // check backslash char in GNewPath
-      int npLen = GNewPath.Length();
-      if (npLen && GNewPath[npLen] != '\\')
-        GNewPath += '\\';
 
       // Need to remove the first subdirectory if it does not exist...
       // It's being replaced with the new folder we drag-dropped...
       // So if there is a '\', remove text up to and including the first one
       int Pos2 = sRemainingPath.Pos("\\");
       if (Pos2 != 0)
-        if (!DirectoryExists(ExtractFilePath(GNewPath + sRemainingPath)))
+        if (!DirectoryExists(ExtractFilePath(GProjectFilePath + sRemainingPath)))
           sRemainingPath = sRemainingPath.SubString(Pos2+1, sRemainingPath.Length()-Pos2);
 
-      String sTempPath = GNewPath;
+      String sTempPath = GProjectFilePath;
 
-      if (!FileExists(GNewPath + sRemainingPath))
+      if (!FileExists(GProjectFilePath + sRemainingPath))
       {
-        // ShowMessage("file missing: " + GNewPath + sRemainingPath);
+        // ShowMessage("file missing: " + GProjectFilePath + sRemainingPath);
 
         // if we can't find the file in the new location drag-dropped folder...
         // maybe it's in the root level...
-        int len = GNewPath.Length();
-        if (len > 0 && GNewPath[len] == '\\')
+        int len = GProjectFilePath.Length();
+        if (len > 0 && GProjectFilePath[len] == '\\')
         {
           int jj;
           int iEnd = 0;
           for (jj = len-1; jj > 0; jj--)
           {
-            if (GNewPath[jj] == '\\')
+            if (GProjectFilePath[jj] == '\\')
             {
               iEnd = jj;
               break;
@@ -116,17 +118,16 @@ void __fastcall TFormMain::ButtonApplyNewRootPathClick(TObject *Sender)
           // drag-dropped folder
           if (iEnd > 0)
           {
-            sTempPath = GNewPath.SubString(1, iEnd);
+            sTempPath = GProjectFilePath.SubString(1, iEnd);
 
-            //if (FileExists(GNewPath + sRemainingPath))
-            //  ShowMessage("file now found at: " + GNewPath + sRemainingPath);
+            //if (FileExists(GProjectFilePath + sRemainingPath))
+            //  ShowMessage("file now found at: " + GProjectFilePath + sRemainingPath);
           }
         }
       }
 
       // replace oldpath with newpath
-      String NewStr = OldStr.SubString(1, Pos1+10-1) + sTempPath + sRemainingPath;
-
+      String NewStr = OldStr.SubString(1, Pos1+10-1) + XmlEncode(sTempPath + sRemainingPath);
 
       // add the rest of the original line
       for (; jj <= len; jj++)
@@ -265,16 +266,29 @@ String __fastcall TFormMain::CommonPath(TStringList *slPaths)
 //---------------------------------------------------------------------------
 void __fastcall TFormMain::Edit1Change(TObject *Sender)
 {
-  GNewPath = Edit1->Text;
+  GProjectFilePath = Edit1->Text;
 }
 //---------------------------------------------------------------------------
 void __fastcall TFormMain::ButtonAboutClick(TObject *Sender)
 {
-  ShowMessage("Windows Movie Maker project-file path corrector\n"
-                                      "by Scott Swift 2018");
+  String sHelp = "Windows Movie Maker project-file path corrector\n"
+                                      "by Scott Swift 2024\n\n";
+  sHelp += "The Problem: Windows Movie Maker project files use absolute file-paths.\n"
+      "That means that after you make a movie, you can't change the location "
+      "of either your project-file or of the media files in your movie.\n"
+      "This app solves that problem!\n\n"
+      "Additionally, \"Tools->Copy project to new folder\" allows you to freely make your movie "
+      "with media files located anywhere on your computer then later consolidate/copy "
+      "only the files used by your movie into a new folder.";
+  ShowMessage(sHelp);
 }
 //---------------------------------------------------------------------------
 void __fastcall TFormMain::ButtonSelectRootFolderClick(TObject *Sender)
+{
+    Edit1->Text = SelectFolder("Select root movie-maker project directory", GProjectFilePath);
+}
+//---------------------------------------------------------------------------
+String __fastcall TFormMain::SelectFolder(String sCaption, String sPath)
 {
     UnicodeString selDir;
     TSelectDirExtOpts opt;
@@ -284,9 +298,9 @@ void __fastcall TFormMain::ButtonSelectRootFolderClick(TObject *Sender)
     opt += TSelectDirExtOpts()<<sdShowEdit;
     opt += TSelectDirExtOpts()<<sdNewUI;
 
-    if (SelectDirectory( L"Select root movie-maker project directory", L"",
-                                      GNewPath, opt, this ))
-        Edit1->Text = GNewPath;
+    if (SelectDirectory(sCaption.c_str(), L"", sPath, opt, this ))
+        return sPath;
+    return "";
 }
 //---------------------------------------------------------------------------
 void __fastcall TFormMain::ButtonReadProjectFileClick(TObject *Sender)
@@ -306,7 +320,7 @@ void __fastcall TFormMain::ButtonReadProjectFileClick(TObject *Sender)
     return; // Cancel
   }
 
-  GFileName = OpenDialog1->FileName;
+  GProjectFileName = OpenDialog1->FileName;
 
   LoadFile();
 }
@@ -324,12 +338,12 @@ void __fastcall TFormMain::ButtonSaveFileClick(TObject *Sender)
     SaveDialog1->Options << ofHideReadOnly
      << ofPathMustExist << ofOverwritePrompt << ofEnableSizing
         << ofNoReadOnlyReturn;
-    SaveDialog1->FileName = GFileName;
+    SaveDialog1->FileName = GProjectFileName;
 
     if (SaveDialog1->Execute())
     {
-      GFileName = SaveDialog1->FileName;
-      Memo1->Lines->SaveToFile(GFileName);
+      GProjectFileName = SaveDialog1->FileName;
+      Memo1->Lines->SaveToFile(GProjectFileName);
     }
   }
   catch(...)
@@ -405,13 +419,13 @@ void __fastcall TFormMain::Timer1FileDropTimeout(TObject *Sender)
     if (GbIsDirectory)
     {
       // handle drag-drop of the folder with video clips and photos
-      GNewPath = GDragDropPath;
-      Edit1->Text = GNewPath;
+      GProjectFilePath = GDragDropPath;
+      Edit1->Text = GProjectFilePath;
     }
     else
     {
       // handle drag-drop of the .wlmp movie project-file
-      GFileName = GDragDropPath;
+      GProjectFileName = GDragDropPath;
       LoadFile();
     }
 
@@ -424,20 +438,162 @@ void __fastcall TFormMain::LoadFile(void)
   {
     Memo1->Clear();
 
-    // Load ini file
-    Memo1->Lines->LoadFromFile(GFileName);
+    // Load wlmp file
+    Memo1->Lines->LoadFromFile(GProjectFileName);
 
     GOldCommonPath = GetCommonPath();
     LabelOldPath->Caption = "Old Path: \"" + GOldCommonPath + "\""; // display it...
-    GNewPath = ExtractFilePath(GFileName);
-    Edit1->Text = GNewPath;
+    GProjectFilePath = ExtractFilePath(GProjectFileName);
+    Edit1->Text = GProjectFilePath;
   }
   catch(...)
   {
-    ShowMessage("Can't load file: \"" + GFileName + "\"");
+    ShowMessage("Can't load file: \"" + GProjectFileName + "\"");
   }
 
   Memo1->SetFocus();
+}
+//---------------------------------------------------------------------------
+void __fastcall TFormMain::CopyMovieImageFilesToNewFolder1Click(TObject *Sender)
+{
+  // Copy movies/images for project to new folder and generate
+  // a new project file to access them.
+
+  // 1. Load the movie-maker project file into Memo1
+  Memo1->Clear();
+  GProjectFileName = "";
+  ButtonReadProjectFileClick(NULL);
+  if (Memo1->Lines->Count == 0)
+    return;
+
+  // 2. Get destination folder for copied media files
+
+  // GProjectFilePath must be set to the path of the project file before calling
+  // SelectFolder()
+  String NewMediaFilesPath =
+    SelectFolder("Choose a folder where your media files will be copied!", GProjectFilePath);
+//  if (!SelectDirectory(NewMediaFilesPath,
+//       TSelectDirOpts() << sdAllowCreate << sdPerformCreate << sdPrompt, 0))
+//    return;
+
+  NewMediaFilesPath = IncludeTrailingPathDelimiter(NewMediaFilesPath);
+
+  // 3. process media file names
+  TStringList* pSlNoExist = NULL;
+
+  try{
+    pSlNoExist = new TStringList();
+
+    ProgressBar1->Position = 0;
+    ProgressBar1->Step = 1;
+    ProgressBar1->Min = 0;
+
+    int iFilepathCount = 0;
+
+    for(int ii = 0; ii < Memo1->Lines->Count; ii++)
+    {
+      String OldFullPath;
+      String OldStr = Memo1->Lines->Strings[ii];
+      int Pos1 = OldStr.Pos("filePath=\"");
+      if (Pos1 != 0)
+        iFilepathCount++;
+    }
+
+    ProgressBar1->Max = iFilepathCount;
+
+    for(int ii = 0; ii < Memo1->Lines->Count; ii++)
+    {
+      String OldFullPath;
+      String OldStr = Memo1->Lines->Strings[ii];
+      int Pos1 = OldStr.Pos("filePath=\"");
+      if (Pos1 == 0)
+        continue;
+
+      ProgressBar1->StepIt();
+
+      // get the old path and find the trailing quote
+      int len = OldStr.Length();
+      int jj;
+      for (jj = Pos1+10; jj <= len; jj++)
+      {
+        Char c = OldStr[jj];
+        if (c == '\"') break;
+        OldFullPath += c;
+      }
+      if (jj > len) // no trailing quote, continue
+        continue;
+
+      OldFullPath = XmlDecode(OldFullPath);
+
+      String FileName = ExtractFileName(OldFullPath);
+      String NewFullPath = NewMediaFilesPath + FileName;
+      if (FileExists(OldFullPath)){
+        try{
+          TFile::Copy(OldFullPath, NewFullPath, true); // overwrite
+          Application->ProcessMessages();
+        }
+        catch(...){
+          pSlNoExist->Add(OldFullPath);
+        }
+      }
+      else
+        pSlNoExist->Add(OldFullPath);
+
+      String sNewLine = OldStr.SubString(1, Pos1+10-1);
+      sNewLine += XmlEncode(NewFullPath);
+      sNewLine += OldStr.SubString(jj, OldStr.Length());
+      Memo1->Lines->Strings[ii] = sNewLine;
+    }
+
+    // Move to line 0, Character 0:
+    Memo1->SelStart = Memo1->Perform(EM_LINEINDEX, 0, 0);
+    Memo1->SelLength = 0;
+    Memo1->Perform(EM_SCROLLCARET, 0, 0);
+    Memo1->SetFocus();
+
+    ProgressBar1->Position = 0;
+
+    // before calling ButtonSaveFileClick(NULL) we expect GProjectFileName
+    // to have the full project file path and name!
+    ButtonSaveFileClick(NULL);
+  }
+  catch(...){
+    ShowMessage("Exception thrown!");
+  }
+
+  if (pSlNoExist){
+    if (pSlNoExist->Count){
+      Memo1->Clear();
+      Memo1->Lines->Add("MISSING FILES (NOT COPIED):");
+      Memo1->Lines->Add("");
+      Memo1->Lines->Add(pSlNoExist->Text);
+    }
+    delete pSlNoExist;
+  }
+}
+//---------------------------------------------------------------------------
+String __fastcall TFormMain::XmlDecode(String sIn)
+{
+      // XML escape chars used in movie-maker file-path
+      //<   &lt;
+      //>   &gt;
+      //&   &amp;
+      String sOut = StringReplace(sIn, "&lt;", "<", TReplaceFlags() << rfReplaceAll);
+      sOut = StringReplace(sOut, "&gt;", ">", TReplaceFlags() << rfReplaceAll);
+      sOut = StringReplace(sOut, "&amp;", "&", TReplaceFlags() << rfReplaceAll);
+      return sOut;
+}
+//---------------------------------------------------------------------------
+String __fastcall TFormMain::XmlEncode(String sIn)
+{
+      // XML escape chars used in movie-maker file-path
+      //<   &lt;
+      //>   &gt;
+      //&   &amp;
+      String sOut = StringReplace(sIn, "<", "&lt;",TReplaceFlags() << rfReplaceAll);
+      sOut = StringReplace(sOut, ">", "&gt;", TReplaceFlags() << rfReplaceAll);
+      sOut = StringReplace(sOut, "&", "&amp;",TReplaceFlags() << rfReplaceAll);
+      return sOut;
 }
 //---------------------------------------------------------------------------
 //!!!!!!!!! TODO: I want to add the ability for the program to recurse through subfolders

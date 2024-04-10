@@ -14,7 +14,7 @@ int WINAPI _tWinMain(HINSTANCE, HINSTANCE, LPTSTR, int)
 	{
 		Application->Initialize();
 		Application->MainFormOnTaskBar = true;
-		TStyleManager::TrySetStyle("Metropolis UI Dark");
+     TStyleManager::TrySetStyle("Windows10 BlackPearl");
      Application->CreateForm(__classid(TFormMain), &FormMain);
 		Application->Run();
 	}

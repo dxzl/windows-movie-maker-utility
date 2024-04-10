@@ -30,6 +30,7 @@
 #include <Vcl.Buttons.hpp>
 #include <Vcl.Menus.hpp>
 #include <System.Classes.hpp>
+#include <System.IOUtils.hpp>
 #include <Registry.hpp>
 //---------------------------------------------------------------------------
 // File path to MovieMaker Prokects
@@ -52,6 +53,10 @@ __published:  // IDE-managed Components
   TLabel *LabelOldPath;
   TButton *ButtonSelectRootFolder;
   TTimer *Timer1;
+  TMainMenu *MainMenu1;
+  TMenuItem *ools1;
+  TMenuItem *CopyMovieImageFilesToNewFolder1;
+  TProgressBar *ProgressBar1;
   void __fastcall ButtonReadProjectFileClick(TObject *Sender);
   void __fastcall ButtonApplyNewRootPathClick(TObject *Sender);
   void __fastcall ButtonAboutClick(TObject *Sender);
@@ -60,6 +65,7 @@ __published:  // IDE-managed Components
   void __fastcall ButtonSelectRootFolderClick(TObject *Sender);
   void __fastcall Timer1FileDropTimeout(TObject *Sender);
   void __fastcall FormShow(TObject *Sender);
+  void __fastcall CopyMovieImageFilesToNewFolder1Click(TObject *Sender);
 protected:
   void __fastcall WMDropFile(TWMDropFiles &Msg);
 
@@ -76,11 +82,14 @@ private:  // User declarations
   void __fastcall LoadFile(void);
   void __fastcall AddFilesToStringList(TStringList* slFiles);
   void __fastcall RecurseFileAdd(TStringList* slFiles);
+  String __fastcall SelectFolder(String sCaption, String sPath);
+  String __fastcall XmlEncode(String sIn);
+  String __fastcall XmlDecode(String sIn);
 
   bool bServersProcessed, GbIsDirectory;
-  String GFileName, GNewPath, GOldCommonPath, GDragDropPath;
+  String GProjectFileName, GProjectFilePath, GOldCommonPath, GDragDropPath;
 
-public:    // User declarations
+  public:    // User declarations
   __fastcall TFormMain(TComponent* Owner);
 };
 //---------------------------------------------------------------------------
