@@ -14,6 +14,9 @@
 // dxzl@live.com June 15, 2017
 // Version 1.1 August 26, 2018
 // Version 1.2 March 11, 2019
+// Version 1.4 April 11, 2024
+
+#define MAX_DISPLAY_FILES 25 // max files to list in a ShowMessage()
 
 TFormMain *FormMain;
 
@@ -343,7 +346,7 @@ void __fastcall TFormMain::ButtonSaveFileClick(TObject *Sender)
     if (SaveDialog1->Execute())
     {
       GProjectFileName = SaveDialog1->FileName;
-      Memo1->Lines->SaveToFile(GProjectFileName);
+      Memo1->Lines->SaveToFile(GProjectFileName, TEncoding::UTF8);
     }
   }
   catch(...)
@@ -439,7 +442,7 @@ void __fastcall TFormMain::LoadFile(void)
     Memo1->Clear();
 
     // Load wlmp file
-    Memo1->Lines->LoadFromFile(GProjectFileName);
+    Memo1->Lines->LoadFromFile(GProjectFileName, TEncoding::UTF8);
 
     GOldCommonPath = GetCommonPath();
     LabelOldPath->Caption = "Old Path: \"" + GOldCommonPath + "\""; // display it...
@@ -454,9 +457,19 @@ void __fastcall TFormMain::LoadFile(void)
   Memo1->SetFocus();
 }
 //---------------------------------------------------------------------------
+void __fastcall TFormMain::Moveprojecttonewfolder1Click(TObject *Sender)
+{
+  CopyOrMoveProject(true);
+}
+//---------------------------------------------------------------------------
 void __fastcall TFormMain::CopyMovieImageFilesToNewFolder1Click(TObject *Sender)
 {
-  // Copy movies/images for project to new folder and generate
+  CopyOrMoveProject(false);
+}
+//---------------------------------------------------------------------------
+void __fastcall TFormMain::CopyOrMoveProject(bool bMove)
+{
+  // Copy/Move movies/images for project to new folder and generate
   // a new project file to access them.
 
   // 1. Load the movie-maker project file into Memo1
@@ -479,10 +492,12 @@ void __fastcall TFormMain::CopyMovieImageFilesToNewFolder1Click(TObject *Sender)
   NewMediaFilesPath = IncludeTrailingPathDelimiter(NewMediaFilesPath);
 
   // 3. process media file names
-  TStringList* pSlNoExist = NULL;
+  TStringList* pSlSourceNoExist = NULL;
+  TStringList* pSlCopySuccess = NULL;
 
   try{
-    pSlNoExist = new TStringList();
+    pSlSourceNoExist = new TStringList();
+    pSlCopySuccess = new TStringList();
 
     ProgressBar1->Position = 0;
     ProgressBar1->Step = 1;
@@ -500,6 +515,7 @@ void __fastcall TFormMain::CopyMovieImageFilesToNewFolder1Click(TObject *Sender)
     }
 
     ProgressBar1->Max = iFilepathCount;
+    bool bAbort = false;
 
     for(int ii = 0; ii < Memo1->Lines->Count; ii++)
     {
@@ -527,17 +543,23 @@ void __fastcall TFormMain::CopyMovieImageFilesToNewFolder1Click(TObject *Sender)
 
       String FileName = ExtractFileName(OldFullPath);
       String NewFullPath = NewMediaFilesPath + FileName;
+
       if (FileExists(OldFullPath)){
         try{
-          TFile::Copy(OldFullPath, NewFullPath, true); // overwrite
-          Application->ProcessMessages();
+          // Note: this throws exception if file already exists!
+          TFile::Copy(OldFullPath, NewFullPath, true); // overwrite true!
+          pSlCopySuccess->Add(OldFullPath);
         }
         catch(...){
-          pSlNoExist->Add(OldFullPath);
+          ShowMessage("Aborting! Unable to copy \"" + OldFullPath +
+                      "\" to \"" + NewFullPath + "\"");
+          bAbort = true;
+          break;
         }
+        Application->ProcessMessages();
       }
       else
-        pSlNoExist->Add(OldFullPath);
+        pSlSourceNoExist->Add(OldFullPath);
 
       String sNewLine = OldStr.SubString(1, Pos1+10-1);
       sNewLine += XmlEncode(NewFullPath);
@@ -553,22 +575,67 @@ void __fastcall TFormMain::CopyMovieImageFilesToNewFolder1Click(TObject *Sender)
 
     ProgressBar1->Position = 0;
 
-    // before calling ButtonSaveFileClick(NULL) we expect GProjectFileName
-    // to have the full project file path and name!
-    ButtonSaveFileClick(NULL);
+    if (pSlSourceNoExist && pSlCopySuccess){
+      if (!bAbort){
+        if (pSlCopySuccess->Count){
+          String s1;
+
+          if (bMove){
+            int iFailCount = 0;
+            for (int ii=0; ii < pSlCopySuccess->Count; ii++){
+              try{
+                TFile::Delete(pSlCopySuccess->Strings[ii]);
+              }
+              catch(...){
+                iFailCount++;
+              }
+            }
+
+            if (iFailCount){
+              s1 += "Aborting. Unable to delete " + String(iFailCount) +
+               " files after copying! Do you have permission to delete these files?";
+              bAbort = true;
+            }
+            else{
+              s1 += String(pSlCopySuccess->Count) + " of " +
+                 String(iFilepathCount-pSlSourceNoExist->Count) +
+                    " file(s) succesfuly moved!";
+            }
+          }
+          else{
+            s1 += String(pSlCopySuccess->Count) + " of " +
+                 String(iFilepathCount-pSlSourceNoExist->Count) +
+                    " file(s) succesfuly copied!";
+          }
+          ShowMessage(s1);
+        }
+
+        if (pSlSourceNoExist->Count){
+          String s1 = "The project file references " + String(pSlSourceNoExist->Count) +
+           " file(s) that don't exist in the specified location!\n\n";
+
+          for (int ii=0; ii < pSlSourceNoExist->Count && ii < MAX_DISPLAY_FILES; ii++)
+            s1 += pSlSourceNoExist->Strings[ii] + "\n";
+
+          if (!bAbort)
+            s1 += "\nYou can choose \"Cancel\" in the next dialog or you can save "
+              "the project using a new name and give it a try!";
+
+          ShowMessage(s1);
+        }
+
+        // before calling ButtonSaveFileClick(NULL) we expect GProjectFileName
+        // to have the full project file path and name!
+        if (!bAbort)
+          ButtonSaveFileClick(NULL);
+      }
+
+      delete pSlSourceNoExist;
+      delete pSlCopySuccess;
+    }
   }
   catch(...){
     ShowMessage("Exception thrown!");
-  }
-
-  if (pSlNoExist){
-    if (pSlNoExist->Count){
-      Memo1->Clear();
-      Memo1->Lines->Add("MISSING FILES (NOT COPIED):");
-      Memo1->Lines->Add("");
-      Memo1->Lines->Add(pSlNoExist->Text);
-    }
-    delete pSlNoExist;
   }
 }
 //---------------------------------------------------------------------------

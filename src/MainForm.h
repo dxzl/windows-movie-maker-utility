@@ -57,6 +57,7 @@ __published:  // IDE-managed Components
   TMenuItem *ools1;
   TMenuItem *CopyMovieImageFilesToNewFolder1;
   TProgressBar *ProgressBar1;
+  TMenuItem *Moveprojecttonewfolder1;
   void __fastcall ButtonReadProjectFileClick(TObject *Sender);
   void __fastcall ButtonApplyNewRootPathClick(TObject *Sender);
   void __fastcall ButtonAboutClick(TObject *Sender);
@@ -66,6 +67,7 @@ __published:  // IDE-managed Components
   void __fastcall Timer1FileDropTimeout(TObject *Sender);
   void __fastcall FormShow(TObject *Sender);
   void __fastcall CopyMovieImageFilesToNewFolder1Click(TObject *Sender);
+  void __fastcall Moveprojecttonewfolder1Click(TObject *Sender);
 protected:
   void __fastcall WMDropFile(TWMDropFiles &Msg);
 
@@ -85,6 +87,7 @@ private:  // User declarations
   String __fastcall SelectFolder(String sCaption, String sPath);
   String __fastcall XmlEncode(String sIn);
   String __fastcall XmlDecode(String sIn);
+  void __fastcall CopyOrMoveProject(bool bMove);
 
   bool bServersProcessed, GbIsDirectory;
   String GProjectFileName, GProjectFilePath, GOldCommonPath, GDragDropPath;
