@@ -33,9 +33,6 @@
 #include <System.IOUtils.hpp>
 #include <Registry.hpp>
 //---------------------------------------------------------------------------
-// File path to MovieMaker Prokects
-#define DEFAULT_PATH (GetSpecialFolder(CSIDL_MYDOCUMENTS) + "\\MovieMaker\\MyProject\\")
-//---------------------------------------------------------------------------
 class TFormMain : public TForm
 {
 __published:  // IDE-managed Components
@@ -44,26 +41,26 @@ __published:  // IDE-managed Components
   TOpenDialog *OpenDialog1;
   TMemo *Memo1;
   TButton *ButtonApplyNewRootPath;
-  TButton *ButtonAbout;
+  TButton *ButtonHelp;
   TButton *ButtonSaveFile;
   TSaveDialog *SaveDialog1;
-  TEdit *Edit1;
-  TLabel *Label3;
+  TEdit *EditMediaFolder;
   TGroupBox *GroupBox1;
-  TLabel *LabelOldPath;
-  TButton *ButtonSelectRootFolder;
+  TLabel *LabelPath;
+  TButton *ButtonSelectMediaFolder;
   TTimer *Timer1;
   TMainMenu *MainMenu1;
   TMenuItem *ools1;
   TMenuItem *CopyMovieImageFilesToNewFolder1;
   TProgressBar *ProgressBar1;
   TMenuItem *Moveprojecttonewfolder1;
+  TLabel *Label1;
   void __fastcall ButtonReadProjectFileClick(TObject *Sender);
   void __fastcall ButtonApplyNewRootPathClick(TObject *Sender);
-  void __fastcall ButtonAboutClick(TObject *Sender);
-  void __fastcall Edit1Change(TObject *Sender);
+  void __fastcall ButtonHelpClick(TObject *Sender);
+  void __fastcall EditMediaFolderChange(TObject *Sender);
   void __fastcall ButtonSaveFileClick(TObject *Sender);
-  void __fastcall ButtonSelectRootFolderClick(TObject *Sender);
+  void __fastcall ButtonSelectMediaFolderClick(TObject *Sender);
   void __fastcall Timer1FileDropTimeout(TObject *Sender);
   void __fastcall FormShow(TObject *Sender);
   void __fastcall CopyMovieImageFilesToNewFolder1Click(TObject *Sender);
@@ -88,9 +85,10 @@ private:  // User declarations
   String __fastcall XmlEncode(String sIn);
   String __fastcall XmlDecode(String sIn);
   void __fastcall CopyOrMoveProject(bool bMove);
+  int __fastcall GetFilePathCount();
 
   bool bServersProcessed, GbIsDirectory;
-  String GProjectFileName, GProjectFilePath, GOldCommonPath, GDragDropPath;
+  String GProjectFileName, GMediaFolderPath, GOldCommonPath, GDragDropPath;
 
   public:    // User declarations
   __fastcall TFormMain(TComponent* Owner);
