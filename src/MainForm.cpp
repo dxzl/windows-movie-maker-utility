@@ -205,6 +205,7 @@ void __fastcall TFormMain::CopyOrMoveProject(bool bMove)
   // 3. process media file names
   TStringList* pSlSourceNoExist = NULL;
   TStringList* pSlCopySuccess = NULL;
+  TStringList* pSlFailDelete = NULL;
   String s1;
 
   ProgressBar1->Position = 0;
@@ -219,8 +220,9 @@ void __fastcall TFormMain::CopyOrMoveProject(bool bMove)
 
       pSlSourceNoExist = new TStringList();
       pSlCopySuccess = new TStringList();
+      pSlFailDelete = new TStringList();
 
-      if (!pSlSourceNoExist || !pSlCopySuccess)
+      if (!pSlSourceNoExist || !pSlCopySuccess || !pSlFailDelete)
         return;
 
       ProgressBar1->Max = iFilepathCount;
@@ -257,15 +259,16 @@ void __fastcall TFormMain::CopyOrMoveProject(bool bMove)
         if (FileExists(OldFullPath)){
           try{
             // Note: this throws exception if file already exists!
-            TFile::Copy(OldFullPath, NewFullPath, true); // overwrite true!
+            // set overwrite true!
+            TFile::Copy(OldFullPath, NewFullPath, true);
             pSlCopySuccess->Add(OldFullPath);
+            Application->ProcessMessages();
           }
           catch(...){
             s1 = "Aborting! Unable to copy \"" + OldFullPath +
                         "\" to \"" + NewFullPath + "\"";
             return;
           }
-          Application->ProcessMessages();
         }
         else
           pSlSourceNoExist->Add(OldFullPath);
@@ -301,19 +304,24 @@ void __fastcall TFormMain::CopyOrMoveProject(bool bMove)
         s1 = "";
 
         if (button == IDYES){
-          int iFailCount = 0;
           for (int ii=0; ii < pSlCopySuccess->Count; ii++){
             try{
               TFile::Delete(pSlCopySuccess->Strings[ii]);
             }
             catch(...){
-              iFailCount++;
+              pSlFailDelete->Add(pSlCopySuccess->Strings[ii]);
             }
+            Application->ProcessMessages();
           }
 
-          if (iFailCount){
-            s1 += "Unable to delete " + String(iFailCount) +
-             " files after copying! Do you have permission to delete these files?\n\n";
+          if (pSlFailDelete->Count){
+            s1 += "Unable to delete " + String(pSlFailDelete->Count) +
+             " files after copying! (could be several reasons...)\n\n";
+
+            for (int ii=0; ii < pSlFailDelete->Count && ii < MAX_DISPLAY_FILES; ii++)
+              s1 += pSlFailDelete->Strings[ii] + "\n";
+
+            s1 += "\n";
           }
         }
       }
@@ -343,12 +351,15 @@ void __fastcall TFormMain::CopyOrMoveProject(bool bMove)
       delete pSlSourceNoExist;
     if (pSlCopySuccess)
       delete pSlCopySuccess;
+    if (pSlFailDelete)
+      delete pSlFailDelete;
 
     if (!s1.IsEmpty())
       ShowMessage(s1);
 
     Label1->Caption = "";
     LabelPath->Caption = "";
+    ProgressBar1->Position = 0;
   }
 }
 //---------------------------------------------------------------------------
