@@ -184,6 +184,8 @@ void __fastcall TFormMain::CopyOrMoveProject(bool bMove)
   // 1. Load the movie-maker project file into Memo1
   Memo1->Clear();
   GProjectFileName = "";
+  ShowMessage("Select a Windows Live Movie Maker "
+       "project file (.wlmp). Click OK to continue...");
   ButtonReadProjectFileClick(NULL);
   if (Memo1->Lines->Count == 0)
     return;
@@ -193,7 +195,7 @@ void __fastcall TFormMain::CopyOrMoveProject(bool bMove)
   // GMediaFolderPath must be set to the path of the project file before calling
   // SelectFolder()
   String NewMediaFilesPath =
-    SelectFolder("Choose a folder where your media files will be copied!", GMediaFolderPath);
+    SelectFolder("Choose an empty folder where your media files will be copied...", GMediaFolderPath);
 //  if (!SelectDirectory(NewMediaFilesPath,
 //       TSelectDirOpts() << sdAllowCreate << sdPerformCreate << sdPrompt, 0))
 //    return;
@@ -202,11 +204,20 @@ void __fastcall TFormMain::CopyOrMoveProject(bool bMove)
   Label1->Caption = "New media folder path: ";
   LabelPath->Caption = "\"" + NewMediaFilesPath + "\""; // display it...
 
+  String sMoveOrCopy = bMove ? "move" : "copy";
+  String sMsg = "Click NO if you have not backed up your original movie-project and media files!\n\n"
+    "Click YES to " + sMoveOrCopy + " media files. Choose NO to cancel.";
+
+  if (MessageBox(Handle, sMsg.w_str(), L"Delete Media Files?",
+            MB_ICONQUESTION + MB_YESNO + MB_DEFBUTTON2) == IDNO)
+    return;
+
+  String s1;
+
   // 3. process media file names
   TStringList* pSlSourceNoExist = NULL;
   TStringList* pSlCopySuccess = NULL;
   TStringList* pSlFailDelete = NULL;
-  String s1;
 
   ProgressBar1->Position = 0;
   ProgressBar1->Step = 1;
@@ -256,27 +267,30 @@ void __fastcall TFormMain::CopyOrMoveProject(bool bMove)
         String FileName = ExtractFileName(OldFullPath);
         String NewFullPath = NewMediaFilesPath + FileName;
 
-        if (FileExists(OldFullPath)){
+        if (OldFullPath == NewFullPath)
+          // if the old project-file is already at the destination, copy will fail!
+          pSlCopySuccess->Add(OldFullPath);
+        else if (FileExists(OldFullPath)){
           try{
-            // Note: this throws exception if file already exists!
-            // set overwrite true!
-            TFile::Copy(OldFullPath, NewFullPath, true);
+            TFile::Copy(OldFullPath, NewFullPath, true); // set overwrite true!
             pSlCopySuccess->Add(OldFullPath);
             Application->ProcessMessages();
           }
           catch(...){
-            s1 = "Aborting! Unable to copy \"" + OldFullPath +
-                        "\" to \"" + NewFullPath + "\"";
+            ShowMessage("Aborting! Unable to copy \"" + OldFullPath +
+                        "\" to \"" + NewFullPath + "\"");
             return;
           }
         }
         else
           pSlSourceNoExist->Add(OldFullPath);
 
-        String sNewLine = OldStr.SubString(1, Pos1+10-1);
-        sNewLine += XmlEncode(NewFullPath);
-        sNewLine += OldStr.SubString(jj, OldStr.Length());
-        Memo1->Lines->Strings[ii] = sNewLine;
+        if (OldFullPath != NewFullPath){
+          String sNewLine = OldStr.SubString(1, Pos1+10-1);
+          sNewLine += XmlEncode(NewFullPath);
+          sNewLine += OldStr.SubString(jj, OldStr.Length());
+          Memo1->Lines->Strings[ii] = sNewLine;
+        }
       }
 
       // Move to line 0, Character 0:
@@ -286,9 +300,9 @@ void __fastcall TFormMain::CopyOrMoveProject(bool bMove)
       Memo1->SetFocus();
 
       if (pSlCopySuccess->Count != iFilepathCount-pSlSourceNoExist->Count){
-        s1 += "Aborting. Failed to copy " +
+        ShowMessage("Aborting. Failed to copy " +
           String((iFilepathCount-pSlSourceNoExist->Count)-pSlCopySuccess->Count) +
-                  " file(s)!";
+                  " file(s)!");
         return;
       }
 
@@ -343,7 +357,7 @@ void __fastcall TFormMain::CopyOrMoveProject(bool bMove)
       ButtonSaveFileClick(NULL);
     }
     catch(...){
-      s1 = "Exception thrown!";
+      ShowMessage("Exception thrown!");
     }
   }
   __finally{
@@ -361,6 +375,7 @@ void __fastcall TFormMain::CopyOrMoveProject(bool bMove)
     LabelPath->Caption = "";
     ProgressBar1->Position = 0;
   }
+
 }
 //---------------------------------------------------------------------------
 int __fastcall TFormMain::GetFilePathCount()
