@@ -75,6 +75,8 @@ BEGIN_MESSAGE_MAP
 END_MESSAGE_MAP(TComponent)
 
 private:  // User declarations
+  String __fastcall BrowseForFolder(HWND hwnd, String sTitle, String sFolder);
+//  bool __fastcall GetListsOfFilesDirsInCurrentDir(TStringList *slFiles, TStringList *slDirs);
   String __fastcall CommonPath(TStringList *slPaths);
   String __fastcall GetCommonPath();
   String __fastcall GetSpecialFolder(int csidl);
