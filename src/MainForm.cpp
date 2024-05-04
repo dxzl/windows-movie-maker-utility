@@ -17,6 +17,7 @@
 // Version 1.4 April 11, 2024
 
 #define MAX_DISPLAY_FILES 25 // max files to list in a ShowMessage()
+#define TIMEOUT_SEARCH 10000 // 10 sec search timeout (mS)
 
 TFormMain *FormMain;
 
@@ -32,7 +33,11 @@ __fastcall TFormMain::TFormMain(TComponent* Owner)
   : TForm(Owner)
 {
   GMediaFolderPath = "";
-  GProjectFileName = "save1.txt";
+  GProjectFileName = "";
+  GCommonPath = "";
+  GSearchFileName = "";
+  GbQuit = false;
+  GbQuitAll = false;
 
   //enable drag&drop files
   ::DragAcceptFiles(this->Handle, true);
@@ -42,145 +47,175 @@ void __fastcall TFormMain::FormShow(TObject *Sender)
 {
   String s = "FIRST: Make a backup of your .wlmp Windows Movie Maker project file!\n\n"
     "Follow the steps on the buttons, 1,2,3,4.\n\n"
-    "(Hint: For steps 1  and 2 you can also drag-drop, first your project-file,\n"
-    "then the folder with your movie and image files to this window. Always drag\n"
-    "the project file first then the folder that has your movie and image files. Finally,\n"
-    "press \"Apply new root-project path\", do any necessary manual editing in\n"
-    "the window and press \"Save file\")\n\n"
+    "(Hint: For steps 1 and 2 you can drag-drop the project-file into this window.\n"
+    "Then drag the folder with your movie and image files into this window.\n"
+    "Finally, press \"Apply new root-project path\" and press \"Save file\")\n\n"
     "Cheers, Scott Swift (dxzl@live.com)";
   Memo1->Lines->Text = s;
 }
 //---------------------------------------------------------------------------
+void __fastcall TFormMain::TimerSearchTimeoutTimer(TObject *Sender)
+{
+  TimerSearchTimeout->Enabled = false;
+  String sMsg = "It is taking a long time to find \"" + GSearchFileName +
+    "\". Click YES to quit this search, NO to continue or CANCEL to abort.";
+
+  int mbResult = MessageBox(Handle, sMsg.w_str(), L"Quit searching?",
+            MB_ICONQUESTION + MB_YESNOCANCEL + MB_DEFBUTTON2);
+
+  if (mbResult == IDYES)
+    GbQuit = true;
+  else if (mbResult == IDCANCEL){
+    GbQuit = true;
+    GbQuitAll = true;
+  }
+}
+//---------------------------------------------------------------------------
 void __fastcall TFormMain::ButtonApplyNewRootPathClick(TObject *Sender)
 {
-  if (GMediaFolderPath.IsEmpty()){
-    ShowMessage("Please click \"2. Select folder where your "
-       "image and movie clips are located\"");
+  if (GProjectFileName.IsEmpty()){
+    ShowMessage("Please click \"1. Read .wlmp project-file\"");
     return;
   }
 
-  // add trailing delimeter in GMediaFolderPath
-  GMediaFolderPath = IncludeTrailingPathDelimiter(GMediaFolderPath);
+  if (GMediaFolderPath.IsEmpty()){
+    ShowMessage("Please click \"2. Select folder where your image and "
+       "movie/image/audio files are located\"");
+    return;
+  }
+
+  TStringList* slMissingFiles = NULL;
 
   try
   {
-    int iCount = Memo1->Lines->Count;
-    if (!iCount)
-      return;
+    slMissingFiles = new TStringList();
 
-    int iFilePathCount = GetFilePathCount();
-    if (!iFilePathCount)
-      return;
-
-    ProgressBar1->Position = 0;
-    ProgressBar1->Step = 1;
-    ProgressBar1->Min = 0;
-    ProgressBar1->Max = iFilePathCount;
-
-    GOldCommonPath = GetCommonPath(); // get again (in case edit text manually changed)
-    Label1->Caption = "Old common media folder path: ";
-    LabelPath->Caption = "\"" + GOldCommonPath + "\""; // display it...
-    int lenOldCommonPath = GOldCommonPath.Length();
-
-    for(int ii = 0 ; ii < iCount ; ii++)
+    try
     {
-      String OldPath;
-      String OldStr = Memo1->Lines->Strings[ii];
-      int Pos1 = OldStr.Pos("filePath=\"");
-      if (Pos1 == 0)
-        continue;
+      int iCount = Memo1->Lines->Count;
+      if (!iCount)
+        return;
 
-      ProgressBar1->StepIt();
+      int iFilePathCount = GetFilePathCount();
+      if (!iFilePathCount)
+        return;
 
-      // get the old path and find the trailing quote
-      int len = OldStr.Length();
-      int jj;
-      for (jj = Pos1+10; jj <= len; jj++)
+      ProgressBar1->Position = 0;
+      ProgressBar1->Step = 1;
+      ProgressBar1->Min = 0;
+      ProgressBar1->Max = iFilePathCount;
+
+      GCommonPath = GetCommonPath(); // get again (in case edit text manually changed)
+
+      int lenOldCommonPath = GCommonPath.Length();
+
+      GbQuitAll = false;
+
+      for(int ii = 0 ; ii < iCount ; ii++)
       {
-        Char c = OldStr[jj];
-        if (c == '\"') break;
-        OldPath += c;
-      }
-      if (jj > len) // no trailing quote, continue
-        continue;
+        String OldPath;
+        String OldStr = Memo1->Lines->Strings[ii];
+        int Pos1 = OldStr.Pos("filePath=\"");
+        if (Pos1 == 0)
+          continue;
 
-      OldPath = XmlDecode(OldPath);
+        ProgressBar1->StepIt();
 
-//      String FileName = ExtractFileName(OldPath);
-//      String FilePath = ExtractFilePath(OldPath);
-      String sRemainingPath = OldPath.SubString(lenOldCommonPath+1, OldPath.Length());
-
-      // Need to remove the first subdirectory if it does not exist...
-      // It's being replaced with the new folder we drag-dropped...
-      // So if there is a '\', remove text up to and including the first one
-      int Pos2 = sRemainingPath.Pos("\\");
-      if (Pos2 != 0)
-        if (!DirectoryExists(ExtractFilePath(GMediaFolderPath + sRemainingPath)))
-          sRemainingPath = sRemainingPath.SubString(Pos2+1, sRemainingPath.Length()-Pos2);
-
-      String sTempPath = GMediaFolderPath;
-
-      if (!FileExists(GMediaFolderPath + sRemainingPath))
-      {
-        // ShowMessage("file missing: " + GMediaFolderPath + sRemainingPath);
-
-        // if we can't find the file in the new location drag-dropped folder...
-        // maybe it's in the root level...
-        int len = GMediaFolderPath.Length();
-        if (len > 0 && GMediaFolderPath[len] == '\\')
+        // get the old path and find the trailing quote
+        int len = OldStr.Length();
+        int jj;
+        for (jj = Pos1+10; jj <= len; jj++)
         {
-          int jj;
-          int iEnd = 0;
-          for (jj = len-1; jj > 0; jj--)
-          {
-            if (GMediaFolderPath[jj] == '\\')
-            {
-              iEnd = jj;
-              break;
-            }
+          Char c = OldStr[jj];
+          if (c == '\"') break;
+          OldPath += c;
+        }
+        if (jj > len) // no trailing quote, continue
+          continue;
+
+        OldPath = XmlDecode(OldPath);
+
+  //      String FileName = ExtractFileName(OldPath);
+  //      String FilePath = ExtractFilePath(OldPath);
+        String sRemainingPath = OldPath.SubString(lenOldCommonPath+1, OldPath.Length());
+
+        // Need to remove the first subdirectory if it does not exist...
+        // It's being replaced with the new folder we drag-dropped...
+        // So if there is a '\' or '/', remove text up to and including the first one
+        int Pos2 = sRemainingPath.Pos("\\");
+        if (Pos2 == 0)
+          Pos2 = sRemainingPath.Pos("/");
+        if (Pos2 != 0)
+          if (!DirectoryExists(ExtractFilePath(GMediaFolderPath + sRemainingPath)))
+            sRemainingPath = sRemainingPath.SubString(Pos2+1, sRemainingPath.Length()-Pos2);
+
+        String sFullPath = GMediaFolderPath + sRemainingPath;
+
+        if (!FileExists(sFullPath))
+        {
+          String sFind = RecurseFind(GMediaFolderPath, ExtractFileName(sFullPath));
+
+          if (GbQuitAll){
+            Memo1->Clear();
+            ProgressBar1->Position = 0;
+            GMediaFolderPath = "";
+            GProjectFileName = "";
+            GCommonPath = "";
+            GSearchFileName = "";
+            GbQuit = false;
+            GbQuitAll = false;
+            LabelMediaFolderPath->Caption = "";
+            LabelProjectFilePath->Caption = "";
+            ShowMessage("Aborted. Try choosing a media files folder "
+                               "that contains fewer sub-folders...");
+            return;
           }
 
-          // quick and dirty attempt to just find the file one level up from the
-          // drag-dropped folder
-          if (iEnd > 0)
-          {
-            sTempPath = GMediaFolderPath.SubString(1, iEnd);
-
-            //if (FileExists(GMediaFolderPath + sRemainingPath))
-            //  ShowMessage("file now found at: " + GMediaFolderPath + sRemainingPath);
+          if (sFind.IsEmpty()){
+            slMissingFiles->Add(sFullPath);
+            sFullPath = "";
           }
+          else
+            sFullPath = sFind;
+        }
+
+        if (!sFullPath.IsEmpty()) {
+          // replace oldpath with newpath
+          String NewStr = OldStr.SubString(1, Pos1+10-1) + XmlEncode(sFullPath);
+
+          // add the rest of the original line
+          for (; jj <= len; jj++)
+            NewStr += OldStr[jj];
+
+          Memo1->Lines->Strings[ii] = NewStr;
         }
       }
 
-      // replace oldpath with newpath
-      String NewStr = OldStr.SubString(1, Pos1+10-1) + XmlEncode(sTempPath + sRemainingPath);
+      // Move to 3rd line, Character 3:
+  //    Memo1->SelStart = Memo1->Perform(EM_LINEINDEX, 2, 0) + 3;
+  //    Memo1->SelLength = 0;
+  //    Memo1->Perform(EM_SCROLLCARET, 0, 0);
+  //    Memo1->SetFocus();
 
-      // add the rest of the original line
-      for (; jj <= len; jj++)
-        NewStr += OldStr[jj];
-
-      Memo1->Lines->Strings[ii] = NewStr;
+      // Move to line 0, Character 0:
+      Memo1->SelStart = Memo1->Perform(EM_LINEINDEX, 0, 0);
+      Memo1->SelLength = 0;
+      Memo1->Perform(EM_SCROLLCARET, 0, 0);
+      Memo1->SetFocus();
     }
-
-    // Move to 3rd line, Character 3:
-//    Memo1->SelStart = Memo1->Perform(EM_LINEINDEX, 2, 0) + 3;
-//    Memo1->SelLength = 0;
-//    Memo1->Perform(EM_SCROLLCARET, 0, 0);
-//    Memo1->SetFocus();
-
-    // Move to line 0, Character 0:
-    Memo1->SelStart = Memo1->Perform(EM_LINEINDEX, 0, 0);
-    Memo1->SelLength = 0;
-    Memo1->Perform(EM_SCROLLCARET, 0, 0);
-    Memo1->SetFocus();
-  }
-  catch(...)
-  {
+    catch(...)
+    {
       ShowMessage("Threw exception...");
+    }
   }
-  Label1->Caption = "";
-  LabelPath->Caption = "";
-  ProgressBar1->Position = 0;
+  __finally{
+    if (slMissingFiles){
+      if (slMissingFiles->Count)
+        ShowMessage("Missing media files: \n\n" + slMissingFiles->Text);
+      delete slMissingFiles;
+    }
+    ProgressBar1->Position = 0;
+  }
 }
 //---------------------------------------------------------------------------
 void __fastcall TFormMain::CopyOrMoveProject(bool bMove)
@@ -188,11 +223,21 @@ void __fastcall TFormMain::CopyOrMoveProject(bool bMove)
   // Copy/Move movies/images for project to new folder and generate
   // a new project file to access them.
 
-  // 1. Load the movie-maker project file into Memo1
   Memo1->Clear();
+
+  LabelMediaFolderPath->Caption = "";
+  GMediaFolderPath = "";
+
+  LabelProjectFilePath->Caption = "";
   GProjectFileName = "";
-  ShowMessage("Select a Windows Live Movie Maker "
-       "project file (.wlmp). Click OK to continue...");
+
+  GCommonPath = "";
+
+  String sMoveOrCopy = bMove ? "MOVE" : "COPY";
+
+  // 1. Load the movie-maker project file into Memo1
+  ShowMessage("Click OK to select a Windows Live Movie Maker "
+       "project file (.wlmp) for " + sMoveOrCopy + "...");
   ButtonReadProjectFileClick(NULL);
   if (Memo1->Lines->Count == 0)
     return;
@@ -204,21 +249,18 @@ void __fastcall TFormMain::CopyOrMoveProject(bool bMove)
   String sProjectFilePath = ExtractFilePath(GProjectFileName);
 
   String NewMediaFilesPath = BrowseForFolder(Handle,
-    "Choose a (preferably empty) folder where this "
-    "movie's media files will be copied...", sProjectFilePath);
+    "Choose a destination folder to " + sMoveOrCopy + " this "
+    "movie's media files into...", sProjectFilePath);
 
   if (NewMediaFilesPath.IsEmpty())
     return;
 
   NewMediaFilesPath = IncludeTrailingPathDelimiter(NewMediaFilesPath);
-  Label1->Caption = "New media folder path: ";
-  LabelPath->Caption = "\"" + NewMediaFilesPath + "\""; // display it...
 
-  String sMoveOrCopy = bMove ? "move" : "copy";
   String sMsg = "Click NO if you have not backed up your original movie-project and media files!\n\n"
     "Click YES to " + sMoveOrCopy + " media files. Choose NO to cancel.";
-
-  if (MessageBox(Handle, sMsg.w_str(), L"Delete Media Files?",
+  String sMsg2 = sMoveOrCopy + " media files?";
+  if (MessageBox(Handle, sMsg.w_str(), sMsg2.w_str(),
             MB_ICONQUESTION + MB_YESNO + MB_DEFBUTTON2) == IDNO)
     return;
 
@@ -378,8 +420,6 @@ void __fastcall TFormMain::CopyOrMoveProject(bool bMove)
     if (pSlFailDelete)
       delete pSlFailDelete;
 
-    Label1->Caption = "";
-    LabelPath->Caption = "";
     ProgressBar1->Position = 0;
   }
 
@@ -438,37 +478,6 @@ String __fastcall TFormMain::GetCommonPath()
   return sOldCommonPath;
 }
 //---------------------------------------------------------------------------
-String __fastcall TFormMain::GetSpecialFolder(int csidl)
-{
-  HMODULE h = NULL;
-  String sOut;
-  WideChar* buf = NULL;
-
-  try{
-    h = LoadLibraryW(L"Shell32.dll");
-
-    if (h != NULL){
-      tGetFolderPath pGetFolderPath;
-      pGetFolderPath = (tGetFolderPath)GetProcAddress(h, "SHGetFolderPathW");
-
-      if (pGetFolderPath != NULL){
-        buf = new WideChar[MAX_PATH];
-        buf[0] = L'\0';
-
-        if ((*pGetFolderPath)(Application->Handle, csidl, NULL, SHGFP_TYPE_CURRENT, (LPTSTR)buf) == S_OK)
-          sOut = String(buf);
-      }
-    }
-
-  }
-  __finally{
-    if (h != NULL) FreeLibrary(h);
-    if (buf != NULL) delete [] buf;
-  }
-
-  return sOut;
-}
-//---------------------------------------------------------------------------
 String __fastcall TFormMain::CommonPath(TStringList *slPaths)
 {
     String sPath;
@@ -497,19 +506,14 @@ String __fastcall TFormMain::CommonPath(TStringList *slPaths)
     return sPath;
 }
 //---------------------------------------------------------------------------
-void __fastcall TFormMain::EditMediaFolderChange(TObject *Sender)
-{
-  GMediaFolderPath = EditMediaFolder->Text;
-}
-//---------------------------------------------------------------------------
 void __fastcall TFormMain::ButtonHelpClick(TObject *Sender)
 {
-  String sHelp = "Windows Movie Maker project-file path corrector\n"
+  String sHelp = "Windows Live Movie Maker project-file path corrector\n"
                                       "by Scott Swift 2024\n\n";
-  sHelp += "The Problem: Windows Movie Maker project files use absolute file-paths.\n"
+  sHelp += "The Problem: Windows Live Movie Maker project files use absolute file-paths.\n"
       "That means that after you make a movie, you can't change the location "
       "of the media files in your movie. This app solves that problem!\n\n"
-      "Use the 1,2,3,4 button steps when you have an old Windows Movie Maker project "
+      "Use the 1,2,3,4 button steps when you have an old Windows Live Movie Maker project "
       "that no longer works because your media files have moved.\n\n"
       "Additionally, \"Tools->Copy/Move project to new folder\" lets you move a working project, "
       "perhaps using media files located in many places on your computer, and consolidate/copy "
@@ -519,7 +523,15 @@ void __fastcall TFormMain::ButtonHelpClick(TObject *Sender)
 //---------------------------------------------------------------------------
 void __fastcall TFormMain::ButtonSelectMediaFolderClick(TObject *Sender)
 {
-    EditMediaFolder->Text = SelectFolder("Select folder where this project's media files are located!", GMediaFolderPath);
+  String sMediaFilesPath = BrowseForFolder(Handle,
+         "Choose the top-level folder where your media files for "
+                "this project are located...", GMediaFolderPath);
+
+  if (sMediaFilesPath.IsEmpty())
+    return;
+
+  GMediaFolderPath = IncludeTrailingPathDelimiter(sMediaFilesPath);
+  LabelMediaFolderPath->Caption = "Media-files: \"" + GMediaFolderPath + "\"";
 }
 //---------------------------------------------------------------------------
 String __fastcall TFormMain::SelectFolder(String sCaption, String sPath)
@@ -554,12 +566,24 @@ void __fastcall TFormMain::ButtonReadProjectFileClick(TObject *Sender)
   }
 
   GProjectFileName = OpenDialog1->FileName;
+  LabelProjectFilePath->Caption = "Project file: \"" + GProjectFileName + "\"";
 
   LoadFile();
 }
 //---------------------------------------------------------------------------
 void __fastcall TFormMain::ButtonSaveFileClick(TObject *Sender)
 {
+  if (GProjectFileName.IsEmpty()){
+    ShowMessage("Please click \"1. Read .wlmp project-file\"");
+    return;
+  }
+
+  if (GMediaFolderPath.IsEmpty()){
+    ShowMessage("Please click \"2. Select folder where your image and "
+       "movie/image/audio files are located\"");
+    return;
+  }
+
   try{
     SaveDialog1->Title = "Save File";
     SaveDialog1->DefaultExt = "wlmp";
@@ -574,6 +598,7 @@ void __fastcall TFormMain::ButtonSaveFileClick(TObject *Sender)
 
     if (SaveDialog1->Execute()){
       GProjectFileName = SaveDialog1->FileName;
+      LabelProjectFilePath->Caption = "Project file: \"" + GProjectFileName + "\"";
       Memo1->Lines->SaveToFile(GProjectFileName, TEncoding::UTF8);
     }
   }
@@ -586,72 +611,45 @@ void __fastcall TFormMain::ButtonSaveFileClick(TObject *Sender)
 //---------------------------------------------------------------------------
 void __fastcall TFormMain::WMDropFile(TWMDropFiles &Msg)
 {
-    // don't process these drag-drop files until previous ones are complete
-    if (!GDragDropPath.IsEmpty())
-      return;
-
     wchar_t* wBuf = NULL;
 
     try{
         //get dropped files count
         int cnt = ::DragQueryFileW((HDROP)Msg.Drop, -1, NULL, 0);
 
-        if (cnt != 1) return;
+        if (cnt == 0 || cnt > 2) return;
 
         wBuf = new wchar_t[MAX_PATH];
+        for (int ii=0; ii < cnt; ii++){
+          // Get next file-name
+          if (::DragQueryFileW((HDROP)Msg.Drop, 0, wBuf, MAX_PATH) > 0){
+              // Load and convert file as per the file-type (either plain or rich text)
+              WideString wFile(wBuf);
 
-        // Get next file-name
-        if (::DragQueryFileW((HDROP)Msg.Drop, 0, wBuf, MAX_PATH) > 0){
-            // Load and convert file as per the file-type (either plain or rich text)
-            WideString wFile(wBuf);
+              // don't process this drag-drop until previous one sets m_DragDropFilePath = ""
+              if (!wFile.IsEmpty()){
+                  String sFile = String(wFile); // convert to utf-8 internal string
 
-            // don't process this drag-drop until previous one sets m_DragDropFilePath = ""
-            if (!wFile.IsEmpty()){
-                String sFile = String(wFile); // convert to utf-8 internal string
-
-                if (FileExists(sFile)){ // is it a file? (then must be the project-file!)
-                    GDragDropPath = sFile;
-                    GbIsDirectory = false;
-                }
-                else{ // is it a directory? (then must be the folder that has our photos and video clips!)
-                  if (DirectoryExists(sFile)){
-                    GDragDropPath = sFile + '\\';
-                    GbIsDirectory = true;
+                  if (FileExists(sFile)){ // is it a file? (then must be the project-file!)
+                    // handle drag-drop of the .wlmp movie project-file
+                    GProjectFileName = sFile;
+                    LabelProjectFilePath->Caption = "Project file: \"" + GProjectFileName + "\"";
+                    LoadFile();
                   }
-                }
-            }
-        }
-
-        // kick off file processing...
-        if (!GDragDropPath.IsEmpty()){
-          Timer1->Enabled = false; // stop timer (just in-case!)
-          Timer1->Interval = 50;
-          Timer1->OnTimer = Timer1FileDropTimeout; // set handler
-          Timer1->Enabled = true; // fire event to send file
+                  else{ // is it a directory? (then must be the folder that has our photos and video clips!)
+                    if (DirectoryExists(sFile)){
+                      // handle drag-drop of the folder with video clips and photos
+                      GMediaFolderPath = IncludeTrailingPathDelimiter(sFile);
+                      LabelMediaFolderPath->Caption = "Media-files: \"" + GMediaFolderPath + "\"";
+                    }
+                  }
+              }
+          }
         }
     }
     __finally{
       try { if (wBuf != NULL) delete [] wBuf; } catch(...) {}
     }
-}
-//---------------------------------------------------------------------------
-void __fastcall TFormMain::Timer1FileDropTimeout(TObject *Sender)
-{
-    Timer1->Enabled = false;
-    if (GbIsDirectory){
-      // handle drag-drop of the folder with video clips and photos
-      GMediaFolderPath = GDragDropPath;
-      EditMediaFolder->Text = GMediaFolderPath;
-    }
-    else{
-      // handle drag-drop of the .wlmp movie project-file
-      GProjectFileName = GDragDropPath;
-      LoadFile();
-      Label1->Caption = "Old common media folder path: ";
-      LabelPath->Caption = "\"" + GOldCommonPath + "\""; // display it...
-    }
-
-    GDragDropPath = "";
 }
 //---------------------------------------------------------------------------
 void __fastcall TFormMain::LoadFile(void)
@@ -662,10 +660,7 @@ void __fastcall TFormMain::LoadFile(void)
     // Load wlmp file
     Memo1->Lines->LoadFromFile(GProjectFileName, TEncoding::UTF8);
 
-    GOldCommonPath = GetCommonPath();
-
-    GMediaFolderPath = "";
-    EditMediaFolder->Clear();
+    GCommonPath = GetCommonPath();
   }
   catch(...){
     ShowMessage("Can't load file: \"" + GProjectFileName + "\"");
@@ -686,202 +681,27 @@ void __fastcall TFormMain::CopyMovieImageFilesToNewFolder1Click(TObject *Sender)
 //---------------------------------------------------------------------------
 String __fastcall TFormMain::XmlDecode(String sIn)
 {
-      // XML escape chars used in movie-maker file-path
-      //<   &lt;
-      //>   &gt;
-      //&   &amp;
-      String sOut = StringReplace(sIn, "&lt;", "<", TReplaceFlags() << rfReplaceAll);
-      sOut = StringReplace(sOut, "&gt;", ">", TReplaceFlags() << rfReplaceAll);
-      sOut = StringReplace(sOut, "&amp;", "&", TReplaceFlags() << rfReplaceAll);
-      return sOut;
+  // XML escape chars used in movie-maker file-path
+  //<   &lt;
+  //>   &gt;
+  //&   &amp;
+  String sOut = StringReplace(sIn, "&lt;", "<", TReplaceFlags() << rfReplaceAll);
+  sOut = StringReplace(sOut, "&gt;", ">", TReplaceFlags() << rfReplaceAll);
+  sOut = StringReplace(sOut, "&amp;", "&", TReplaceFlags() << rfReplaceAll);
+  return sOut;
 }
 //---------------------------------------------------------------------------
 String __fastcall TFormMain::XmlEncode(String sIn)
 {
-      // XML escape chars used in movie-maker file-path
-      //<   &lt;
-      //>   &gt;
-      //&   &amp;
-      String sOut = StringReplace(sIn, "<", "&lt;",TReplaceFlags() << rfReplaceAll);
-      sOut = StringReplace(sOut, ">", "&gt;", TReplaceFlags() << rfReplaceAll);
-      sOut = StringReplace(sOut, "&", "&amp;",TReplaceFlags() << rfReplaceAll);
-      return sOut;
+  // XML escape chars used in movie-maker file-path
+  //<   &lt;
+  //>   &gt;
+  //&   &amp;
+  String sOut = StringReplace(sIn, "<", "&lt;",TReplaceFlags() << rfReplaceAll);
+  sOut = StringReplace(sOut, ">", "&gt;", TReplaceFlags() << rfReplaceAll);
+  sOut = StringReplace(sOut, "&", "&amp;",TReplaceFlags() << rfReplaceAll);
+  return sOut;
 }
-//---------------------------------------------------------------------------
-//!!!!!!!!! TODO: I want to add the ability for the program to recurse through subfolders
-// to find movie clips/photos
-//void __fastcall TFormMain::RecurseFileAdd(TStringList* slFiles)
-//// Uses the WideString versions of the Win32 API FindFirstFile and FindNextFile directly
-//// and converts the resulting paths to UTF-8 for storage in an ordinary TStringList
-////
-//// Use SetCurrentDirectory() to set our root directory or TOpenDialog sets it also...
-//{
-//  Application->ProcessMessages();
-//
-//  if (slFiles == NULL) return;
-//
-//  TStringList* slSubDirs = new TStringList();
-//  if (slSubDirs == NULL) return;
-//
-//  TWin32FindDataW sr;
-//  HANDLE hFind = NULL;
-//  TFindexInfoLevels l = FindExInfoStandard; // FindExInfoBasic was defined later!
-//  TFindexSearchOps s = FindExSearchLimitToDirectories;
-//
-//  try
-//  {
-//    hFind = FindFirstFileExW(L"*", l, &sr, s, NULL, (DWORD)FIND_FIRST_EX_LARGE_FETCH);
-//
-//    // Get list of subdirectories into a stringlist
-//    if (hFind != INVALID_HANDLE_VALUE)
-//    {
-//      do
-//      {
-//        if ((sr.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0)
-//        {
-//          int len = wcslen(sr.cFileName);
-//
-//          if (len == 1 && sr.cFileName[0] == L'.')
-//            continue;
-//          if (len == 2 && sr.cFileName[0] == L'.' && sr.cFileName[1] == L'.')
-//            continue;
-//
-////          slSubDirs->Add(WideToUtf8(WideString(sr.cFileName)));
-//          slSubDirs->Add(sr.cFileName);
-//        }
-//      } while (FindNextFileW(hFind, &sr) == TRUE);
-//    }
-//  }
-//  __finally
-//  {
-//    try { if (hFind != NULL) FindClose(hFind); } catch(...) {}
-//  }
-//
-//  AddFilesToStringList(slFiles);
-//
-//  // Get songs in all subdirectories
-//  for (int ii = 0; ii < slSubDirs->Count; ii++)
-//  {
-//    Application->ProcessMessages();
-//    if (Application->Terminated || (int)GetAsyncKeyState(VK_ESCAPE) < 0)
-//      break;
-//
-//    if (SetCurrentDirectoryW(slSubDirs->Strings[ii].w_str()))
-//    {
-//      RecurseFileAdd(slFiles);
-//      SetCurrentDirectoryW(L"..");
-//    }
-//  }
-//
-//  delete slSubDirs;
-//}
-////---------------------------------------------------------------------------
-//void __fastcall TFormMain::AddFilesToStringList(TStringList* slFiles)
-//// slFiles is in UTF-8!
-//{
-//  TWin32FindDataW sr;
-//  HANDLE hFind = NULL;
-//  TFindexInfoLevels l = FindExInfoStandard; // FindExInfoBasic was defined later!
-//  TFindexSearchOps s = FindExSearchNameMatch;
-//
-//  try
-//  {
-//    // Get the current directory
-//    String wdir = GetCurrentDir();
-//
-//    hFind = FindFirstFileExW(L"*", l, &sr, s, NULL, (DWORD)FIND_FIRST_EX_LARGE_FETCH);
-//
-//    // Get list of files into a stringlist
-//    if (hFind != INVALID_HANDLE_VALUE)
-//    {
-//      String ws;
-//
-//      // Don't add these file-types...
-//      int mask = FILE_ATTRIBUTE_DIRECTORY|FILE_ATTRIBUTE_SYSTEM|FILE_ATTRIBUTE_HIDDEN;
-//
-//      do
-//      {
-//        if ((sr.dwFileAttributes & mask) == 0)
-//        {
-//          ws = wdir + L"\\" + sr.cFileName;
-//          slFiles->Add(ws);
-//        }
-//      } while (FindNextFileW(hFind, &sr) == TRUE);
-//    }
-//  }
-//  __finally
-//  {
-//    try { if (hFind != NULL) ::FindClose(hFind); } catch(...) {}
-//  }
-//}
-//---------------------------------------------------------------------------
-// Pass in pointers to stringlists for file-paths and directories
-// Before calling this, you must call SetCurrentDir() to set the top search folder
-// returns false if failure
-//bool __fastcall TFormMain::GetListsOfFilesDirsInCurrentDir(TStringList *slFiles, TStringList *slDirs)
-//{
-//  if (!slFiles || !slDirs)
-//    return false;
-//
-//  TWin32FindDataW sr;
-//  HANDLE hFind = NULL;
-//  TFindexInfoLevels l = FindExInfoStandard; // FindExInfoBasic was defined later!
-//  TFindexSearchOps s = FindExSearchNameMatch; // FindExSearchLimitToDirectories;
-//
-//  try{
-//    // Get the current directory
-//    String sCurrentDir = GetCurrentDir();
-//
-//    // Add trailing backslash
-//    int iDirLen = sCurrentDir.Length();
-//    if (iDirLen && sCurrentDir[iDirLen] != '\\')
-//      sCurrentDir += '\\';
-//
-//    // NOTE: a trailing backslash for FindFirst() is not allowed
-//    String sTemp = sCurrentDir + "*";
-//
-//    // 9/16/2019 the commented out version FAILS on Win XP!!!!!
-//    //hFind = ::FindFirstFileEx(sTemp.c_str(), l, &sr, s, NULL, (DWORD)FIND_FIRST_EX_LARGE_FETCH);
-//    hFind = ::FindFirstFileEx(sTemp.c_str(), l, &sr, s, NULL, NULL);
-//
-//    // Get list of subdirectories into a stringlist
-//    if (hFind == INVALID_HANDLE_VALUE)
-//      return false;
-//
-//    // Get list of files into a stringlist
-//
-//    do{
-//      if (sr.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY){
-//        int len = wcslen(sr.cFileName);
-//
-//        if (len == 1 && sr.cFileName[0] == '.')
-//          continue;
-//        if (len == 2 && sr.cFileName[0] == '.' && sr.cFileName[1] == '.')
-//          continue;
-//
-//#if DEBUG_ON
-//        MainForm->CWrite("\r\nTMainForm::FindFirstNextToStringLists(): Directory=\"" + String(sr.cFileName) + "\"\r\n");
-//#endif
-//        slDirs->Add(String(sr.cFileName));
-//      }
-//      else if (!(sr.dwFileAttributes & (FILE_ATTRIBUTE_SYSTEM|FILE_ATTRIBUTE_HIDDEN)))
-//        slFiles->Add(sCurrentDir + String(sr.cFileName));
-//
-//      //Application->ProcessMessages();
-//
-//    } while (::FindNextFile(hFind, &sr) == TRUE);
-//  }
-//  __finally{
-//    try{
-//      if (hFind)
-//        ::FindClose(hFind);
-//    }
-//    catch(...){
-//      return false;
-//    }
-//  }
-//  return true;
-//}
 //---------------------------------------------------------------------------
 // browseforfolder function
 // returns the folder or an empty string if no folder was selected
@@ -910,5 +730,106 @@ String __fastcall TFormMain::BrowseForFolder(HWND hwnd, String sTitle, String sF
 
     return sRet;
 }
+//---------------------------------------------------------------------------
+String __fastcall TFormMain::RecurseFind(String sPath, String sFile){
 
+  sPath =  IncludeTrailingPathDelimiter(sPath);
+  wchar_t folder[MAX_PATH];
+  wcscpy(folder, sPath.w_str());
+
+  wchar_t filename[MAX_PATH];
+  wcscpy(filename, sFile.w_str());
+
+  wchar_t fullpath[MAX_PATH];
+  fullpath[0] = L'\0';
+
+  wchar_t delimiter[2] = {0};
+  delimiter[0] = sPath[sPath.Length()];
+
+  GbQuit = false;
+  TimerSearchTimeout->Interval = TIMEOUT_SEARCH;
+  GSearchFileName = sFile;
+  TimerSearchTimeout->Enabled = true;
+
+  int iLen = findfile_recursive(folder, filename, fullpath, delimiter);
+
+  if (TimerSearchTimeout->Enabled)
+    TimerSearchTimeout->Enabled = false;
+
+  if (!iLen || GbQuit)
+    return "";
+
+  return String(fullpath);
+}
+//---------------------------------------------------------------------------
+int __fastcall TFormMain::findfile_recursive(const wchar_t *folder,
+                  const wchar_t *filename, wchar_t *fullpath, wchar_t *delimiter)
+{
+    wchar_t wildcard[MAX_PATH];
+    int lenFolder = wcslen(folder);
+    if (!lenFolder || folder[lenFolder-1] != delimiter[0])
+      swprintf(wildcard, L"%s%c*", folder, delimiter[0]);
+    else
+      swprintf(wildcard, L"%s*", folder);
+    WIN32_FIND_DATA fd;
+    HANDLE handle = FindFirstFile(wildcard, &fd);
+    if(handle == INVALID_HANDLE_VALUE) return 0;
+    do
+    {
+      Application->ProcessMessages(); // allows GbQuit to be set in timer-timeout hook
+
+      if (GbQuit)
+        return 0;
+
+      if(wcscmp(fd.cFileName, L".") == 0 || wcscmp(fd.cFileName, L"..") == 0)
+        continue;
+
+      wchar_t path[MAX_PATH];
+      if (!lenFolder || folder[lenFolder-1] != delimiter[0])
+        swprintf(path, L"%s%c%s", folder, delimiter[0], fd.cFileName);
+      else
+        swprintf(path, L"%s%s", folder, fd.cFileName);
+
+      if(_wcsicmp(fd.cFileName, filename) == 0)
+        wcscpy(fullpath, path);
+      else if(fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)
+        findfile_recursive(path, filename, fullpath, delimiter);
+      if(wcslen(fullpath))
+        break;
+    } while(!GbQuit && FindNextFile(handle, &fd));
+    FindClose(handle);
+    return wcslen(fullpath);
+}
+//---------------------------------------------------------------------------
+//String __fastcall TFormMain::GetSpecialFolder(int csidl)
+//{
+//  HMODULE h = NULL;
+//  String sOut;
+//  WideChar* buf = NULL;
+//
+//  try{
+//    h = LoadLibraryW(L"Shell32.dll");
+//
+//    if (h != NULL){
+//      tGetFolderPath pGetFolderPath;
+//      pGetFolderPath = (tGetFolderPath)GetProcAddress(h, "SHGetFolderPathW");
+//
+//      if (pGetFolderPath != NULL){
+//        buf = new WideChar[MAX_PATH];
+//        buf[0] = L'\0';
+//
+//        if ((*pGetFolderPath)(Application->Handle, csidl, NULL, SHGFP_TYPE_CURRENT, (LPTSTR)buf) == S_OK)
+//          sOut = String(buf);
+//      }
+//    }
+//
+//  }
+//  __finally{
+//    if (h != NULL) FreeLibrary(h);
+//    if (buf != NULL) delete [] buf;
+//  }
+//
+//  return sOut;
+//}
+//---------------------------------------------------------------------------
 

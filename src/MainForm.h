@@ -32,6 +32,8 @@
 #include <System.Classes.hpp>
 #include <System.IOUtils.hpp>
 #include <Registry.hpp>
+#include <stdio.h>
+#include <Windows.h>
 //---------------------------------------------------------------------------
 class TFormMain : public TForm
 {
@@ -40,31 +42,29 @@ __published:  // IDE-managed Components
   TButton *ButtonReadProjectFile;
   TOpenDialog *OpenDialog1;
   TMemo *Memo1;
-  TButton *ButtonApplyNewRootPath;
-  TButton *ButtonHelp;
-  TButton *ButtonSaveFile;
   TSaveDialog *SaveDialog1;
-  TEdit *EditMediaFolder;
   TGroupBox *GroupBox1;
-  TLabel *LabelPath;
-  TButton *ButtonSelectMediaFolder;
-  TTimer *Timer1;
+  TLabel *LabelProjectFilePath;
   TMainMenu *MainMenu1;
   TMenuItem *ools1;
   TMenuItem *CopyMovieImageFilesToNewFolder1;
   TProgressBar *ProgressBar1;
   TMenuItem *Moveprojecttonewfolder1;
-  TLabel *Label1;
+  TLabel *LabelMediaFolderPath;
+  TButton *ButtonSelectMediaFolder;
+  TButton *ButtonHelp;
+  TTimer *TimerSearchTimeout;
+  TButton *ButtonApplyNewRootPath;
+  TButton *ButtonSaveFile;
   void __fastcall ButtonReadProjectFileClick(TObject *Sender);
   void __fastcall ButtonApplyNewRootPathClick(TObject *Sender);
   void __fastcall ButtonHelpClick(TObject *Sender);
-  void __fastcall EditMediaFolderChange(TObject *Sender);
   void __fastcall ButtonSaveFileClick(TObject *Sender);
   void __fastcall ButtonSelectMediaFolderClick(TObject *Sender);
-  void __fastcall Timer1FileDropTimeout(TObject *Sender);
   void __fastcall FormShow(TObject *Sender);
   void __fastcall CopyMovieImageFilesToNewFolder1Click(TObject *Sender);
   void __fastcall Moveprojecttonewfolder1Click(TObject *Sender);
+  void __fastcall TimerSearchTimeoutTimer(TObject *Sender);
 protected:
   void __fastcall WMDropFile(TWMDropFiles &Msg);
 
@@ -75,6 +75,15 @@ BEGIN_MESSAGE_MAP
 END_MESSAGE_MAP(TComponent)
 
 private:  // User declarations
+//  int __fastcall findfile_recursive(const wchar_t *folder_path,
+//       const wchar_t *filename, wchar_t *found_full_path, wchar_t *delimiter);
+//  String __fastcall RecurseFind(String sPath, String sFile);
+
+  int __fastcall findfile_recursive(const wchar_t *folder,
+                const wchar_t *filename, wchar_t *fullpath, wchar_t *delimiter);
+  String __fastcall RecurseFind(String sPath, String sFile);
+
+
   String __fastcall BrowseForFolder(HWND hwnd, String sTitle, String sFolder);
 //  bool __fastcall GetListsOfFilesDirsInCurrentDir(TStringList *slFiles, TStringList *slDirs);
   String __fastcall CommonPath(TStringList *slPaths);
@@ -89,8 +98,8 @@ private:  // User declarations
   void __fastcall CopyOrMoveProject(bool bMove);
   int __fastcall GetFilePathCount();
 
-  bool bServersProcessed, GbIsDirectory;
-  String GProjectFileName, GMediaFolderPath, GOldCommonPath, GDragDropPath;
+  String GProjectFileName, GMediaFolderPath, GCommonPath, GSearchFileName;
+  bool GbQuit, GbQuitAll;
 
   public:    // User declarations
   __fastcall TFormMain(TComponent* Owner);
