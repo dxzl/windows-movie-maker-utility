@@ -82,7 +82,7 @@
         <Custom_Styles>&quot;Windows10 BlackPearl|VCLSTYLE|$(BDSCOMMONDIR)\Styles\Windows10BlackPearl.vsf&quot;</Custom_Styles>
     </PropertyGroup>
     <PropertyGroup Condition="'$(Base_Win32)'!=''">
-        <PackageImports>appanalytics;AsyncProCR;bcbsmp;bindcomp;bindcompfmx;bindcompvcl;bindengine;CustomIPTransport;dbrtl;dsnap;EssentialsCR;fmx;fmxase;fmxdae;fmxobj;IndyCore;IndyProtocols;IndySystem;RadiantShapesFmx;RadiantShapesFmx_Design;RaizeComponentsVcl;RaizeComponentsVclDb;rtl;svn;SysToolsCR;SysToolsDBCR;tethering;User;vcl;vclactnband;vcldb;vcldsnap;vclie;vclimg;VclSmp;vcltouch;vclwinx;vclx;xmlrtl;$(PackageImports)</PackageImports>
+        <PackageImports>appanalytics;AsyncProCR;bcbsmp;bindcomp;bindcompfmx;bindcompvcl;bindengine;CustomIPTransport;dbrtl;dsnap;EssentialsCR;fmx;fmxase;fmxdae;fmxobj;IndyCore;IndyProtocols;IndySystem;RadiantShapesFmx;RadiantShapesFmx_Design;RaizeComponentsVcl;RaizeComponentsVclDb;rtl;svn;SysToolsCR;SysToolsDBCR;tethering;User;vcl;vclactnband;vcldb;vcldsnap;vclie;vclimg;VclSmp;vcltouch;vclwinx;vclx;VirtualTreesCR;xmlrtl;$(PackageImports)</PackageImports>
         <IncludePath>$(BDSINCLUDE)\windows\vcl;$(IncludePath)</IncludePath>
         <DCC_Namespace>Winapi;System.Win;Data.Win;Datasnap.Win;Web.Win;Soap.Win;Xml.Win;Bde;$(DCC_Namespace)</DCC_Namespace>
         <VerInfo_IncludeVerInfo>true</VerInfo_IncludeVerInfo>
@@ -100,6 +100,7 @@
         <VerInfo_Keys>CompanyName=;FileDescription=$(MSBuildProjectName);FileVersion=1.0.0.0;InternalName=;LegalCopyright=;LegalTrademarks=;OriginalFilename=;ProgramID=com.embarcadero.$(MSBuildProjectName);ProductName=$(MSBuildProjectName);ProductVersion=1.0.0.0;Comments=</VerInfo_Keys>
         <VerInfo_Locale>1033</VerInfo_Locale>
         <Manifest_File>$(BDS)\bin\default_app.manifest</Manifest_File>
+        <PackageImports>AsyncProCR;SysToolsCR;SysToolsDBCR;VirtualTreesCR;$(PackageImports)</PackageImports>
     </PropertyGroup>
     <PropertyGroup Condition="'$(Cfg_1)'!=''">
         <BCC_OptimizeForSpeed>false</BCC_OptimizeForSpeed>
@@ -151,8 +152,8 @@
         <BCC_PCHName_Clang>MovieMakerUtilityPCH.h</BCC_PCHName_Clang>
         <VerInfo_IncludeVerInfo>true</VerInfo_IncludeVerInfo>
         <VerInfo_Locale>1033</VerInfo_Locale>
-        <VerInfo_MinorVer>6</VerInfo_MinorVer>
-        <VerInfo_Keys>CompanyName=;FileDescription=$(MSBuildProjectName);FileVersion=1.6.0.0;InternalName=;LegalCopyright=;LegalTrademarks=;OriginalFilename=;ProgramID=com.embarcadero.$(MSBuildProjectName);ProductName=$(MSBuildProjectName);ProductVersion=1.6.0.0;Comments=</VerInfo_Keys>
+        <VerInfo_MinorVer>7</VerInfo_MinorVer>
+        <VerInfo_Keys>CompanyName=;FileDescription=$(MSBuildProjectName);FileVersion=1.7.0.0;InternalName=;LegalCopyright=;LegalTrademarks=;OriginalFilename=;ProgramID=com.embarcadero.$(MSBuildProjectName);ProductName=$(MSBuildProjectName);ProductVersion=1.7.0.0;Comments=</VerInfo_Keys>
         <AppDPIAwarenessMode>PerMonitor</AppDPIAwarenessMode>
         <Icon_MainIcon>Colorize.ico</Icon_MainIcon>
         <BT_BuildType>Debug</BT_BuildType>
@@ -205,6 +206,8 @@
                     <Source Name="MainSource">MovieMakerUtility.cpp</Source>
                 </Source>
                 <Excluded_Packages>
+                    <Excluded_Packages Name="C:\Users\Public\Documents\Embarcadero\Studio\22.0\bpl\SysToolsCD280.bpl">File C:\Users\Public\Documents\Embarcadero\Studio\22.0\bpl\SysToolsCD280.bpl not found</Excluded_Packages>
+                    <Excluded_Packages Name="C:\Users\Public\Documents\Embarcadero\Studio\22.0\bpl\SysToolsDBCD280.bpl">File C:\Users\Public\Documents\Embarcadero\Studio\22.0\bpl\SysToolsDBCD280.bpl not found</Excluded_Packages>
                     <Excluded_Packages Name="$(BDSBIN)\bcboffice2k280.bpl">Embarcadero C++Builder Office 2000 Servers Package</Excluded_Packages>
                     <Excluded_Packages Name="$(BDSBIN)\bcbofficexp280.bpl">Embarcadero C++Builder Office XP Servers Package</Excluded_Packages>
                 </Excluded_Packages>

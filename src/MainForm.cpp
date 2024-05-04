@@ -69,6 +69,8 @@ void __fastcall TFormMain::TimerSearchTimeoutTimer(TObject *Sender)
     GbQuit = true;
     GbQuitAll = true;
   }
+  else // restart timer
+    TimerSearchTimeout->Enabled = false;
 }
 //---------------------------------------------------------------------------
 void __fastcall TFormMain::ButtonApplyNewRootPathClick(TObject *Sender)
@@ -287,8 +289,6 @@ void __fastcall TFormMain::CopyOrMoveProject(bool bMove)
         return;
 
       ProgressBar1->Max = iFilepathCount;
-
-      bool bAbort = false;
 
       for(int ii = 0; ii < Memo1->Lines->Count; ii++){
         String OldFullPath;
@@ -720,7 +720,7 @@ String __fastcall TFormMain::BrowseForFolder(HWND hwnd, String sTitle, String sF
     br.lpszTitle = sTitle.c_str();
     br.lParam = (LPARAM)sFolder.c_str();
 
-    LPITEMIDLIST pidl = NULL;
+    LPITEMIDLIST pidl;
     if ((pidl = SHBrowseForFolder(&br)) != NULL)
     {
         wchar_t buffer[MAX_PATH];
