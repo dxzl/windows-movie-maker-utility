@@ -1,5 +1,5 @@
 //---------------------------------------------------------------------------
-// Copyright 2008 Scott Swift - This program is distributed under the
+// 2024 Scott Swift - This program is distributed under the
 // terms of the GNU General Public License.
 //---------------------------------------------------------------------------
 // DESCRIPTION:
@@ -82,8 +82,6 @@ private:  // User declarations
   int __fastcall findfile_recursive(const wchar_t *folder,
                 const wchar_t *filename, wchar_t *fullpath, wchar_t *delimiter);
   String __fastcall RecurseFind(String sPath, String sFile);
-
-
   String __fastcall BrowseForFolder(HWND hwnd, String sTitle, String sFolder);
 //  bool __fastcall GetListsOfFilesDirsInCurrentDir(TStringList *slFiles, TStringList *slDirs);
   String __fastcall CommonPath(TStringList *slPaths);
@@ -97,6 +95,7 @@ private:  // User declarations
   String __fastcall XmlDecode(String sIn);
   void __fastcall CopyOrMoveProject(bool bMove);
   int __fastcall GetFilePathCount();
+  void __fastcall DoSaveFileDialog(void);
 
   String GProjectFileName, GMediaFolderPath, GCommonPath, GSearchFileName;
   bool GbQuit, GbQuitAll;

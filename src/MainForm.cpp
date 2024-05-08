@@ -406,7 +406,7 @@ void __fastcall TFormMain::CopyOrMoveProject(bool bMove)
       // to have the full project file path and name!
       ShowMessage("Next, you will choose where to save the newly modified "
            "movie project file. Click OK to continue...");
-      ButtonSaveFileClick(NULL);
+      DoSaveFileDialog();
     }
     catch(...){
       ShowMessage("Exception thrown!");
@@ -584,6 +584,11 @@ void __fastcall TFormMain::ButtonSaveFileClick(TObject *Sender)
     return;
   }
 
+  DoSaveFileDialog();
+}
+//---------------------------------------------------------------------------
+void __fastcall TFormMain::DoSaveFileDialog(void)
+{
   try{
     SaveDialog1->Title = "Save File";
     SaveDialog1->DefaultExt = "wlmp";
