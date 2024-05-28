@@ -46,7 +46,7 @@ __published:  // IDE-managed Components
   TGroupBox *GroupBox1;
   TLabel *LabelProjectFilePath;
   TMainMenu *MainMenu1;
-  TMenuItem *ools1;
+  TMenuItem *MenuTools;
   TMenuItem *CopyMovieImageFilesToNewFolder1;
   TProgressBar *ProgressBar1;
   TMenuItem *Moveprojecttonewfolder1;
@@ -56,6 +56,7 @@ __published:  // IDE-managed Components
   TTimer *TimerSearchTimeout;
   TButton *ButtonApplyNewRootPath;
   TButton *ButtonSaveFile;
+  TMenuItem *MenuReset;
   void __fastcall ButtonReadProjectFileClick(TObject *Sender);
   void __fastcall ButtonApplyNewRootPathClick(TObject *Sender);
   void __fastcall ButtonHelpClick(TObject *Sender);
@@ -65,6 +66,9 @@ __published:  // IDE-managed Components
   void __fastcall CopyMovieImageFilesToNewFolder1Click(TObject *Sender);
   void __fastcall Moveprojecttonewfolder1Click(TObject *Sender);
   void __fastcall TimerSearchTimeoutTimer(TObject *Sender);
+  void __fastcall FormCreate(TObject *Sender);
+  void __fastcall FormDestroy(TObject *Sender);
+  void __fastcall MenuResetClick(TObject *Sender);
 protected:
   void __fastcall WMDropFile(TWMDropFiles &Msg);
 
@@ -82,6 +86,9 @@ private:  // User declarations
   int __fastcall findfile_recursive(const wchar_t *folder,
                 const wchar_t *filename, wchar_t *fullpath, wchar_t *delimiter);
   String __fastcall RecurseFind(String sPath, String sFile);
+  String __fastcall AddMediaFolderPath(String sCaption);
+  bool __fastcall ApplyRootPath(int iFilePathCount, String sRootPath, TStringList* slMissingFiles);
+  int __fastcall GetValidPathCount(int iFilePathCount);
   String __fastcall BrowseForFolder(HWND hwnd, String sTitle, String sFolder);
 //  bool __fastcall GetListsOfFilesDirsInCurrentDir(TStringList *slFiles, TStringList *slDirs);
   String __fastcall CommonPath(TStringList *slPaths);
@@ -90,15 +97,17 @@ private:  // User declarations
   void __fastcall LoadFile(void);
   void __fastcall AddFilesToStringList(TStringList* slFiles);
   void __fastcall RecurseFileAdd(TStringList* slFiles);
-  String __fastcall SelectFolder(String sCaption, String sPath);
   String __fastcall XmlEncode(String sIn);
   String __fastcall XmlDecode(String sIn);
-  void __fastcall CopyOrMoveProject(bool bMove);
+  void __fastcall CopyOrMoveProject(bool bMove, bool bUseExistingProject);
   int __fastcall GetFilePathCount();
   void __fastcall DoSaveFileDialog(void);
+  void __fastcall Reset(void);
 
-  String GProjectFileName, GMediaFolderPath, GCommonPath, GSearchFileName;
+  String GProjectFileName, GCommonPath, GSearchFileName;
   bool GbQuit, GbQuitAll;
+
+  TStringList* pSlMediaFolderPaths;
 
   public:    // User declarations
   __fastcall TFormMain(TComponent* Owner);

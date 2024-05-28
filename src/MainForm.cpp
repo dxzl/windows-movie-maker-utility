@@ -32,7 +32,6 @@ INT CALLBACK BrowseCallbackProc(HWND hwnd, UINT uMsg, LPARAM lp, LPARAM pData)
 __fastcall TFormMain::TFormMain(TComponent* Owner)
   : TForm(Owner)
 {
-  GMediaFolderPath = "";
   GProjectFileName = "";
   GCommonPath = "";
   GSearchFileName = "";
@@ -41,6 +40,17 @@ __fastcall TFormMain::TFormMain(TComponent* Owner)
 
   //enable drag&drop files
   ::DragAcceptFiles(this->Handle, true);
+}
+//---------------------------------------------------------------------------
+void __fastcall TFormMain::FormCreate(TObject *Sender)
+{
+  pSlMediaFolderPaths = new TStringList();
+}
+//---------------------------------------------------------------------------
+void __fastcall TFormMain::FormDestroy(TObject *Sender)
+{
+  if (pSlMediaFolderPaths)
+    delete pSlMediaFolderPaths;
 }
 //---------------------------------------------------------------------------
 void __fastcall TFormMain::FormShow(TObject *Sender)
@@ -52,6 +62,30 @@ void __fastcall TFormMain::FormShow(TObject *Sender)
     "Finally, press \"Apply new root-project path\" and press \"Save file\")\n\n"
     "Cheers, Scott Swift (dxzl@live.com)";
   Memo1->Lines->Text = s;
+}
+//---------------------------------------------------------------------------
+void __fastcall TFormMain::MenuResetClick(TObject *Sender)
+{
+  Reset();
+}
+//---------------------------------------------------------------------------
+void __fastcall TFormMain::Reset(void)
+{
+  Memo1->Clear();
+
+  pSlMediaFolderPaths->Clear();
+  LabelMediaFolderPath->Caption = "";
+  LabelMediaFolderPath->Hint = "";
+
+  GProjectFileName = "";
+  LabelProjectFilePath->Caption = "";
+
+  GCommonPath = "";
+  GSearchFileName = "";
+  GbQuit = false;
+  GbQuitAll = false;
+
+  ProgressBar1->Position = 0;
 }
 //---------------------------------------------------------------------------
 void __fastcall TFormMain::TimerSearchTimeoutTimer(TObject *Sender)
@@ -80,7 +114,7 @@ void __fastcall TFormMain::ButtonApplyNewRootPathClick(TObject *Sender)
     return;
   }
 
-  if (GMediaFolderPath.IsEmpty()){
+  if (!pSlMediaFolderPaths->Count){
     ShowMessage("Please click \"2. Select folder where your image and "
        "movie/image/audio files are located\"");
     return;
@@ -88,20 +122,91 @@ void __fastcall TFormMain::ButtonApplyNewRootPathClick(TObject *Sender)
 
   TStringList* slMissingFiles = NULL;
 
+  Memo1->ReadOnly = true;
+
   try
   {
+    int iCount = Memo1->Lines->Count;
+    if (!iCount)
+      return;
+
+    int iFilePathCount = GetFilePathCount();
+    if (!iFilePathCount)
+      return;
+
+    if (GetValidPathCount(iFilePathCount) == iFilePathCount){
+      String sMsg = "This project's file-paths are all OK as-is. "
+          "Do you want to copy this project and its media files to a new location instead?";
+      String sMsg2 = "Copy project instead?";
+      int mbResult = MessageBox(Handle, sMsg.w_str(), sMsg2.w_str(),
+                         MB_ICONQUESTION + MB_YESNOCANCEL + MB_DEFBUTTON1);
+      if (mbResult == IDCANCEL)
+        return;
+      if (mbResult == IDYES) {
+        CopyOrMoveProject(false, true); // copy and use existing project...
+        return;
+      }
+    }
+
     slMissingFiles = new TStringList();
 
+    if (!slMissingFiles)
+      return;
+
+    for (int ii = 0; ii < pSlMediaFolderPaths->Count; ii++) {
+      if (!ApplyRootPath(iFilePathCount, pSlMediaFolderPaths->Strings[ii], slMissingFiles)){
+        Reset();
+        if (slMissingFiles)
+          slMissingFiles->Clear();
+        ShowMessage("Aborted. Try choosing a media files folder "
+                           "that contains fewer sub-folders...");
+        break;
+      }
+    }
+
+    // FYI: Move to 3rd line, Character 3:
+    //  Memo1->SelStart = Memo1->Perform(EM_LINEINDEX, 2, 0) + 3;
+    //  Memo1->SelLength = 0;
+    //  Memo1->Perform(EM_SCROLLCARET, 0, 0);
+    //  Memo1->SetFocus();
+
+    // Move to line 0, Character 0:
+    Memo1->SelStart = Memo1->Perform(EM_LINEINDEX, 0, 0);
+    Memo1->SelLength = 0;
+    Memo1->Perform(EM_SCROLLCARET, 0, 0);
+    Memo1->SetFocus();
+
+    if (GetValidPathCount(iFilePathCount) == iFilePathCount){
+      slMissingFiles->Clear();
+      ShowMessage("This movie project should work OK now. Click the \"Save file\" button to save it!");
+    }
+  }
+  __finally{
+    if (slMissingFiles){
+      if (slMissingFiles->Count)
+        ShowMessage("There are still " + String(slMissingFiles->Count) +
+         " missing media files (Hint: Click button "
+         "\"2\" to add more media folders to search. Optionally you can drag-drop "
+         "additional folders to search and then press button \"3\"): \n\n" + slMissingFiles->Text);
+      delete slMissingFiles;
+    }
+    Memo1->ReadOnly = false;
+  }
+}
+//---------------------------------------------------------------------------
+bool __fastcall TFormMain::ApplyRootPath(int iFilePathCount, String sRootPath, TStringList* slMissingFiles)
+{
+  if (!slMissingFiles)
+    return false;
+
+  int iCount = Memo1->Lines->Count;
+  if (!iCount)
+    return false;
+
+  try
+  {
     try
     {
-      int iCount = Memo1->Lines->Count;
-      if (!iCount)
-        return;
-
-      int iFilePathCount = GetFilePathCount();
-      if (!iFilePathCount)
-        return;
-
       ProgressBar1->Position = 0;
       ProgressBar1->Step = 1;
       ProgressBar1->Min = 0;
@@ -111,7 +216,11 @@ void __fastcall TFormMain::ButtonApplyNewRootPathClick(TObject *Sender)
 
       int lenOldCommonPath = GCommonPath.Length();
 
+      int iUpdatedPathCount = 0;
+
       GbQuitAll = false;
+
+      slMissingFiles->Clear();
 
       for(int ii = 0 ; ii < iCount ; ii++)
       {
@@ -137,6 +246,9 @@ void __fastcall TFormMain::ButtonApplyNewRootPathClick(TObject *Sender)
 
         OldPath = XmlDecode(OldPath);
 
+        if (FileExists(OldPath))
+          continue;
+
   //      String FileName = ExtractFileName(OldPath);
   //      String FilePath = ExtractFilePath(OldPath);
         String sRemainingPath = OldPath.SubString(lenOldCommonPath+1, OldPath.Length());
@@ -147,31 +259,19 @@ void __fastcall TFormMain::ButtonApplyNewRootPathClick(TObject *Sender)
         int Pos2 = sRemainingPath.Pos("\\");
         if (Pos2 == 0)
           Pos2 = sRemainingPath.Pos("/");
+
         if (Pos2 != 0)
-          if (!DirectoryExists(ExtractFilePath(GMediaFolderPath + sRemainingPath)))
+          if (!DirectoryExists(ExtractFilePath(sRootPath + sRemainingPath)))
             sRemainingPath = sRemainingPath.SubString(Pos2+1, sRemainingPath.Length()-Pos2);
 
-        String sFullPath = GMediaFolderPath + sRemainingPath;
+        String sFullPath = sRootPath + sRemainingPath;
 
         if (!FileExists(sFullPath))
         {
-          String sFind = RecurseFind(GMediaFolderPath, ExtractFileName(sFullPath));
+          String sFind = RecurseFind(sRootPath, ExtractFileName(sFullPath));
 
-          if (GbQuitAll){
-            Memo1->Clear();
-            ProgressBar1->Position = 0;
-            GMediaFolderPath = "";
-            GProjectFileName = "";
-            GCommonPath = "";
-            GSearchFileName = "";
-            GbQuit = false;
-            GbQuitAll = false;
-            LabelMediaFolderPath->Caption = "";
-            LabelProjectFilePath->Caption = "";
-            ShowMessage("Aborted. Try choosing a media files folder "
-                               "that contains fewer sub-folders...");
-            return;
-          }
+          if (GbQuitAll)
+            return false;
 
           if (sFind.IsEmpty()){
             slMissingFiles->Add(sFullPath);
@@ -190,74 +290,76 @@ void __fastcall TFormMain::ButtonApplyNewRootPathClick(TObject *Sender)
             NewStr += OldStr[jj];
 
           Memo1->Lines->Strings[ii] = NewStr;
+          iUpdatedPathCount++;
         }
       }
 
-      // Move to 3rd line, Character 3:
-  //    Memo1->SelStart = Memo1->Perform(EM_LINEINDEX, 2, 0) + 3;
-  //    Memo1->SelLength = 0;
-  //    Memo1->Perform(EM_SCROLLCARET, 0, 0);
-  //    Memo1->SetFocus();
+      if (iUpdatedPathCount)
+        ShowMessage("Updated " + String(iUpdatedPathCount) +
+                          " file paths from \"" + sRootPath + "\"");
 
-      // Move to line 0, Character 0:
-      Memo1->SelStart = Memo1->Perform(EM_LINEINDEX, 0, 0);
-      Memo1->SelLength = 0;
-      Memo1->Perform(EM_SCROLLCARET, 0, 0);
-      Memo1->SetFocus();
+      return true;
     }
     catch(...)
     {
       ShowMessage("Threw exception...");
+      return false;
     }
   }
   __finally{
-    if (slMissingFiles){
-      if (slMissingFiles->Count)
-        ShowMessage("Missing media files: \n\n" + slMissingFiles->Text);
-      delete slMissingFiles;
-    }
     ProgressBar1->Position = 0;
   }
 }
 //---------------------------------------------------------------------------
-void __fastcall TFormMain::CopyOrMoveProject(bool bMove)
+void __fastcall TFormMain::CopyOrMoveProject(bool bMove, bool bUseExistingProject)
 {
-  // Copy/Move movies/images for project to new folder and generate
-  // a new project file to access them.
-
-  Memo1->Clear();
-
-  LabelMediaFolderPath->Caption = "";
-  GMediaFolderPath = "";
-
-  LabelProjectFilePath->Caption = "";
-  GProjectFileName = "";
-
-  GCommonPath = "";
+  // Copy/Move movies/images from a working project to new media folder and generate
+  // a new project file that accesses them.
 
   String sMoveOrCopy = bMove ? "MOVE" : "COPY";
 
-  // 1. Load the movie-maker project file into Memo1
-  ShowMessage("Click OK to select a Windows Live Movie Maker "
-       "project file (.wlmp) for " + sMoveOrCopy + "...");
-  ButtonReadProjectFileClick(NULL);
-  if (Memo1->Lines->Count == 0)
+  // 1. Load a working movie-maker project file into Memo1
+  if (!bUseExistingProject){
+    Reset();
+
+    ShowMessage("Click OK to select a working Windows Live Movie Maker "
+         "project file (.wlmp) to " + sMoveOrCopy + "...");
+    ButtonReadProjectFileClick(NULL);
+    if (Memo1->Lines->Count == 0)
+      return;
+  }
+  else
+    GCommonPath = GetCommonPath();
+
+  int iFilepathCount = GetFilePathCount();
+  if (!iFilepathCount)
     return;
 
-  // 2. Get destination folder for copied media files
+  int iInvalidPathCount = iFilepathCount - GetValidPathCount(iFilepathCount);
 
-  // GMediaFolderPath must be set to the path of the project file before calling
-  // SelectFolder()
-  String sProjectFilePath = ExtractFilePath(GProjectFileName);
+  if (iInvalidPathCount){
+    String sMsg = String(iInvalidPathCount) + " of the media files referenced "
+      "in this project file do not exist where expected! "
+      "You should click CANCEL to quit then press Reset and use the 1, 2, 3, 4 buttons to fix "
+      "broken file-paths. Then you can safely " + sMoveOrCopy + " your project.";
+    String sMsg2 = sMoveOrCopy + " media files...";
+    if (MessageBox(Handle, sMsg.w_str(), sMsg2.w_str(),
+              MB_ICONQUESTION + MB_OKCANCEL + MB_DEFBUTTON2) == IDCANCEL)
+      return;
+  }
 
-  String NewMediaFilesPath = BrowseForFolder(Handle,
-    "Choose a destination folder to " + sMoveOrCopy + " this "
-    "movie's media files into...", sProjectFilePath);
+  // 2. Get new destination folder to copy media files into
 
-  if (NewMediaFilesPath.IsEmpty())
+  LabelMediaFolderPath->Caption = "";
+  LabelMediaFolderPath->Hint = "";
+  pSlMediaFolderPaths->Clear();
+
+  String sCaption = "Choose a destination folder to " + sMoveOrCopy +
+                      " this movie's media files into...";
+  String NewMediaFolderPath = AddMediaFolderPath(sCaption);
+
+  if (NewMediaFolderPath.IsEmpty())
     return;
-
-  NewMediaFilesPath = IncludeTrailingPathDelimiter(NewMediaFilesPath);
 
   String sMsg = "Click NO if you have not backed up your original movie-project and media files!\n\n"
     "Click YES to " + sMoveOrCopy + " media files. Choose NO to cancel.";
@@ -271,16 +373,8 @@ void __fastcall TFormMain::CopyOrMoveProject(bool bMove)
   TStringList* pSlCopySuccess = NULL;
   TStringList* pSlFailDelete = NULL;
 
-  ProgressBar1->Position = 0;
-  ProgressBar1->Step = 1;
-  ProgressBar1->Min = 0;
-
   try{
     try{
-      int iFilepathCount = GetFilePathCount();
-      if (!iFilepathCount)
-        return;
-
       pSlSourceNoExist = new TStringList();
       pSlCopySuccess = new TStringList();
       pSlFailDelete = new TStringList();
@@ -288,6 +382,9 @@ void __fastcall TFormMain::CopyOrMoveProject(bool bMove)
       if (!pSlSourceNoExist || !pSlCopySuccess || !pSlFailDelete)
         return;
 
+      ProgressBar1->Position = 0;
+      ProgressBar1->Step = 1;
+      ProgressBar1->Min = 0;
       ProgressBar1->Max = iFilepathCount;
 
       for(int ii = 0; ii < Memo1->Lines->Count; ii++){
@@ -313,7 +410,7 @@ void __fastcall TFormMain::CopyOrMoveProject(bool bMove)
         OldFullPath = XmlDecode(OldFullPath);
 
         String FileName = ExtractFileName(OldFullPath);
-        String NewFullPath = NewMediaFilesPath + FileName;
+        String NewFullPath = NewMediaFolderPath + FileName;
 
         if (OldFullPath == NewFullPath)
           // if the old project-file is already at the destination, copy will fail!
@@ -425,6 +522,63 @@ void __fastcall TFormMain::CopyOrMoveProject(bool bMove)
 
 }
 //---------------------------------------------------------------------------
+int __fastcall TFormMain::GetValidPathCount(int iFilePathCount)
+{
+  int iCount = Memo1->Lines->Count;
+  if (!iCount)
+    return 0;
+
+  int iValidCount = 0;
+
+  try
+  {
+    try
+    {
+      ProgressBar1->Position = 0;
+      ProgressBar1->Step = 1;
+      ProgressBar1->Min = 0;
+      ProgressBar1->Max = iFilePathCount;
+
+      for(int ii = 0 ; ii < iCount ; ii++)
+      {
+        String OldPath;
+        String OldStr = Memo1->Lines->Strings[ii];
+        int Pos1 = OldStr.Pos("filePath=\"");
+        if (Pos1 == 0)
+          continue;
+
+        ProgressBar1->StepIt();
+
+        // get the old path and find the trailing quote
+        int len = OldStr.Length();
+        int jj;
+        for (jj = Pos1+10; jj <= len; jj++)
+        {
+          Char c = OldStr[jj];
+          if (c == '\"') break;
+          OldPath += c;
+        }
+        if (jj > len) // no trailing quote, continue
+          continue;
+
+        OldPath = XmlDecode(OldPath);
+
+        if (FileExists(OldPath))
+          iValidCount++;
+      }
+    }
+    catch(...)
+    {
+      ShowMessage("Threw exception...");
+      iValidCount = 0;
+    }
+  }
+  __finally{
+    ProgressBar1->Position = 0;
+  }
+  return iValidCount;
+}
+//---------------------------------------------------------------------------
 int __fastcall TFormMain::GetFilePathCount()
 {
   int iFilepathCount = 0;
@@ -509,7 +663,7 @@ String __fastcall TFormMain::CommonPath(TStringList *slPaths)
 void __fastcall TFormMain::ButtonHelpClick(TObject *Sender)
 {
   String sHelp = "Windows Live Movie Maker project-file path corrector\n"
-                                      "by Scott Swift 2024\n\n";
+                                                      "by Scott Swift\n\n";
   sHelp += "The Problem: Windows Live Movie Maker project files use absolute file-paths.\n"
       "That means that after you make a movie, you can't change the location "
       "of the media files in your movie. This app solves that problem!\n\n"
@@ -517,36 +671,55 @@ void __fastcall TFormMain::ButtonHelpClick(TObject *Sender)
       "that no longer works because your media files have moved.\n\n"
       "Additionally, \"Tools->Copy/Move project to new folder\" lets you move a working project, "
       "perhaps using media files located in many places on your computer, and consolidate/copy "
-      "all of those media files into a single folder. Then you can save the new project file anywhere.";
+      "all of those media files into a single folder. Then you can save the new project "
+      "file anywhere.";
   ShowMessage(sHelp);
 }
 //---------------------------------------------------------------------------
 void __fastcall TFormMain::ButtonSelectMediaFolderClick(TObject *Sender)
 {
-  String sMediaFilesPath = BrowseForFolder(Handle,
-         "Choose the top-level folder where your media files for "
-                "this project are located...", GMediaFolderPath);
+  String sNewPath;
+  String sCaption = "Add a folder where your media files for "
+                                        "this project are located...";
+  for(;;){
+    if (pSlMediaFolderPaths->Count) {
+      int mbResult = MessageBox(Handle, L"Add another media folder to search?", L"Add media folder?",
+              MB_ICONQUESTION + MB_YESNO + MB_DEFBUTTON2);
 
-  if (sMediaFilesPath.IsEmpty())
-    return;
+      if (mbResult == IDNO)
+        break;
+    }
 
-  GMediaFolderPath = IncludeTrailingPathDelimiter(sMediaFilesPath);
-  LabelMediaFolderPath->Caption = "Media-files: \"" + GMediaFolderPath + "\"";
+    sNewPath = AddMediaFolderPath(sCaption);
+
+    if (sNewPath.IsEmpty())
+      break;
+  }
+
+  if (pSlMediaFolderPaths->Count)
+    ButtonApplyNewRootPathClick(NULL);
 }
 //---------------------------------------------------------------------------
-String __fastcall TFormMain::SelectFolder(String sCaption, String sPath)
+String __fastcall TFormMain::AddMediaFolderPath(String sCaption)
 {
-    UnicodeString selDir;
-    TSelectDirExtOpts opt;
+  String sInitialPath;
+  if (pSlMediaFolderPaths->Count > 0)
+    sInitialPath = pSlMediaFolderPaths->Strings[pSlMediaFolderPaths->Count-1];
 
-    opt.Clear();
-    opt += TSelectDirExtOpts()<<sdNewFolder;
-    opt += TSelectDirExtOpts()<<sdShowEdit;
-    opt += TSelectDirExtOpts()<<sdNewUI;
+  String sNewPath = BrowseForFolder(Handle, sCaption, sInitialPath);
 
-    if (SelectDirectory(sCaption.c_str(), L"", sPath, opt, this ))
-        return sPath;
+  if (sNewPath.IsEmpty())
     return "";
+
+  sNewPath = IncludeTrailingPathDelimiter(sNewPath);
+
+  pSlMediaFolderPaths->Add(sNewPath);
+  LabelMediaFolderPath->Caption = "Media-folder (" +
+                    String(pSlMediaFolderPaths->Count) +
+                                          "): \"" + sNewPath + "\"";
+  LabelMediaFolderPath->Hint = pSlMediaFolderPaths->Text;
+
+  return sNewPath;
 }
 //---------------------------------------------------------------------------
 void __fastcall TFormMain::ButtonReadProjectFileClick(TObject *Sender)
@@ -578,7 +751,7 @@ void __fastcall TFormMain::ButtonSaveFileClick(TObject *Sender)
     return;
   }
 
-  if (GMediaFolderPath.IsEmpty()){
+  if (!pSlMediaFolderPaths->Count){
     ShowMessage("Please click \"2. Select folder where your image and "
        "movie/image/audio files are located\"");
     return;
@@ -633,7 +806,7 @@ void __fastcall TFormMain::WMDropFile(TWMDropFiles &Msg)
 
               // don't process this drag-drop until previous one sets m_DragDropFilePath = ""
               if (!wFile.IsEmpty()){
-                  String sFile = String(wFile); // convert to utf-8 internal string
+                 String sFile = String(wFile); // convert to utf-8 internal string
 
                   if (FileExists(sFile)){ // is it a file? (then must be the project-file!)
                     // handle drag-drop of the .wlmp movie project-file
@@ -644,8 +817,10 @@ void __fastcall TFormMain::WMDropFile(TWMDropFiles &Msg)
                   else{ // is it a directory? (then must be the folder that has our photos and video clips!)
                     if (DirectoryExists(sFile)){
                       // handle drag-drop of the folder with video clips and photos
-                      GMediaFolderPath = IncludeTrailingPathDelimiter(sFile);
-                      LabelMediaFolderPath->Caption = "Media-files: \"" + GMediaFolderPath + "\"";
+                      String sNewFolder = IncludeTrailingPathDelimiter(sFile);
+                      pSlMediaFolderPaths->Add(sNewFolder);
+                      LabelMediaFolderPath->Caption = "Media-files: \"" + sNewFolder + "\"";
+                      LabelMediaFolderPath->Hint = pSlMediaFolderPaths->Text;
                     }
                   }
               }
@@ -676,12 +851,12 @@ void __fastcall TFormMain::LoadFile(void)
 //---------------------------------------------------------------------------
 void __fastcall TFormMain::Moveprojecttonewfolder1Click(TObject *Sender)
 {
-  CopyOrMoveProject(true);
+  CopyOrMoveProject(true, false); // move and prompt for project-file
 }
 //---------------------------------------------------------------------------
 void __fastcall TFormMain::CopyMovieImageFilesToNewFolder1Click(TObject *Sender)
 {
-  CopyOrMoveProject(false);
+  CopyOrMoveProject(false, false); // copy and prompt for project-file
 }
 //---------------------------------------------------------------------------
 String __fastcall TFormMain::XmlDecode(String sIn)
