@@ -19,6 +19,9 @@
 #define MAX_DISPLAY_FILES 25 // max files to list in a ShowMessage()
 #define TIMEOUT_SEARCH 10000 // 10 sec search timeout (mS)
 
+#define XMLFILEPATH "filePath=\"" // indicates a file-path in a .wmlp XML project-file
+#define XMLFILEPATH_LENGTH 10 // length of XMLFILEPATH search string
+
 TFormMain *FormMain;
 
 // callback function
@@ -203,112 +206,111 @@ bool __fastcall TFormMain::ApplyRootPath(int iFilePathCount, String sRootPath, T
   if (!iCount)
     return false;
 
+  bool bRet = false;
+
   try
   {
-    try
+    ProgressBar1->Position = 0;
+    ProgressBar1->Step = 1;
+    ProgressBar1->Min = 0;
+    ProgressBar1->Max = iFilePathCount;
+
+    GCommonPath = GetCommonPath(); // get again (in case edit text manually changed)
+
+    int lenOldCommonPath = GCommonPath.Length();
+
+    int iUpdatedPathCount = 0;
+
+    GbQuitAll = false;
+
+    slMissingFiles->Clear();
+
+    for(int ii = 0 ; ii < iCount ; ii++)
     {
-      ProgressBar1->Position = 0;
-      ProgressBar1->Step = 1;
-      ProgressBar1->Min = 0;
-      ProgressBar1->Max = iFilePathCount;
+      String OldPath;
+      String OldStr = Memo1->Lines->Strings[ii];
+      int Pos1 = OldStr.Pos(XMLFILEPATH);
+      if (Pos1 == 0)
+        continue;
 
-      GCommonPath = GetCommonPath(); // get again (in case edit text manually changed)
+      ProgressBar1->StepIt();
 
-      int lenOldCommonPath = GCommonPath.Length();
-
-      int iUpdatedPathCount = 0;
-
-      GbQuitAll = false;
-
-      slMissingFiles->Clear();
-
-      for(int ii = 0 ; ii < iCount ; ii++)
+      // get the old path and find the trailing quote
+      int len = OldStr.Length();
+      int jj;
+      for (jj = Pos1+XMLFILEPATH_LENGTH; jj <= len; jj++)
       {
-        String OldPath;
-        String OldStr = Memo1->Lines->Strings[ii];
-        int Pos1 = OldStr.Pos("filePath=\"");
-        if (Pos1 == 0)
-          continue;
+        Char c = OldStr[jj];
+        if (c == '\"') break;
+        OldPath += c;
+      }
+      if (jj > len) // no trailing quote, continue
+        continue;
 
-        ProgressBar1->StepIt();
+      OldPath = XmlDecode(OldPath);
 
-        // get the old path and find the trailing quote
-        int len = OldStr.Length();
-        int jj;
-        for (jj = Pos1+10; jj <= len; jj++)
-        {
-          Char c = OldStr[jj];
-          if (c == '\"') break;
-          OldPath += c;
+      if (FileExists(OldPath))
+        continue;
+
+//      String FileName = ExtractFileName(OldPath);
+//      String FilePath = ExtractFilePath(OldPath);
+      String sRemainingPath = OldPath.SubString(lenOldCommonPath+1, OldPath.Length());
+
+      // Need to remove the first subdirectory if it does not exist...
+      // It's being replaced with the new folder we drag-dropped...
+      // So if there is a '\' or '/', remove text up to and including the first one
+      int Pos2 = sRemainingPath.Pos("\\");
+      if (Pos2 == 0)
+        Pos2 = sRemainingPath.Pos("/");
+
+      if (Pos2 != 0)
+        if (!DirectoryExists(ExtractFilePath(sRootPath + sRemainingPath)))
+          sRemainingPath = sRemainingPath.SubString(Pos2+1, sRemainingPath.Length()-Pos2);
+
+      String sFullPath = sRootPath + sRemainingPath;
+
+      if (!FileExists(sFullPath))
+      {
+        String sFind = RecurseFind(sRootPath, ExtractFileName(sFullPath));
+
+        if (GbQuitAll)
+          goto myFinally;
+
+        if (sFind.IsEmpty()){
+          slMissingFiles->Add(sFullPath);
+          sFullPath = "";
         }
-        if (jj > len) // no trailing quote, continue
-          continue;
-
-        OldPath = XmlDecode(OldPath);
-
-        if (FileExists(OldPath))
-          continue;
-
-  //      String FileName = ExtractFileName(OldPath);
-  //      String FilePath = ExtractFilePath(OldPath);
-        String sRemainingPath = OldPath.SubString(lenOldCommonPath+1, OldPath.Length());
-
-        // Need to remove the first subdirectory if it does not exist...
-        // It's being replaced with the new folder we drag-dropped...
-        // So if there is a '\' or '/', remove text up to and including the first one
-        int Pos2 = sRemainingPath.Pos("\\");
-        if (Pos2 == 0)
-          Pos2 = sRemainingPath.Pos("/");
-
-        if (Pos2 != 0)
-          if (!DirectoryExists(ExtractFilePath(sRootPath + sRemainingPath)))
-            sRemainingPath = sRemainingPath.SubString(Pos2+1, sRemainingPath.Length()-Pos2);
-
-        String sFullPath = sRootPath + sRemainingPath;
-
-        if (!FileExists(sFullPath))
-        {
-          String sFind = RecurseFind(sRootPath, ExtractFileName(sFullPath));
-
-          if (GbQuitAll)
-            return false;
-
-          if (sFind.IsEmpty()){
-            slMissingFiles->Add(sFullPath);
-            sFullPath = "";
-          }
-          else
-            sFullPath = sFind;
-        }
-
-        if (!sFullPath.IsEmpty()) {
-          // replace oldpath with newpath
-          String NewStr = OldStr.SubString(1, Pos1+10-1) + XmlEncode(sFullPath);
-
-          // add the rest of the original line
-          for (; jj <= len; jj++)
-            NewStr += OldStr[jj];
-
-          Memo1->Lines->Strings[ii] = NewStr;
-          iUpdatedPathCount++;
-        }
+        else
+          sFullPath = sFind;
       }
 
-      if (iUpdatedPathCount)
-        ShowMessage("Updated " + String(iUpdatedPathCount) +
-                          " file paths from \"" + sRootPath + "\"");
+      if (!sFullPath.IsEmpty()) {
+        // replace oldpath with newpath
+        String NewStr = OldStr.SubString(1, Pos1+XMLFILEPATH_LENGTH-1) + XmlEncode(sFullPath);
 
-      return true;
+        // add the rest of the original line
+        for (; jj <= len; jj++)
+          NewStr += OldStr[jj];
+
+        Memo1->Lines->Strings[ii] = NewStr;
+        iUpdatedPathCount++;
+      }
     }
-    catch(...)
-    {
-      ShowMessage("Threw exception...");
-      return false;
-    }
+
+    if (iUpdatedPathCount)
+      ShowMessage("Updated " + String(iUpdatedPathCount) +
+                        " file paths from \"" + sRootPath + "\"");
+
+    bRet = true;
   }
-  __finally{
-    ProgressBar1->Position = 0;
+  catch(...)
+  {
+    ShowMessage("Threw exception...");
   }
+
+myFinally:
+  ProgressBar1->Position = 0;
+  return bRet;
 }
 //---------------------------------------------------------------------------
 void __fastcall TFormMain::CopyOrMoveProject(bool bMove, bool bUseExistingProject)
@@ -390,7 +392,7 @@ void __fastcall TFormMain::CopyOrMoveProject(bool bMove, bool bUseExistingProjec
       for(int ii = 0; ii < Memo1->Lines->Count; ii++){
         String OldFullPath;
         String OldStr = Memo1->Lines->Strings[ii];
-        int Pos1 = OldStr.Pos("filePath=\"");
+        int Pos1 = OldStr.Pos(XMLFILEPATH);
         if (Pos1 == 0)
           continue;
 
@@ -399,7 +401,7 @@ void __fastcall TFormMain::CopyOrMoveProject(bool bMove, bool bUseExistingProjec
         // get the old path and find the trailing quote
         int len = OldStr.Length();
         int jj;
-        for (jj = Pos1+10; jj <= len; jj++){
+        for (jj = Pos1+XMLFILEPATH_LENGTH; jj <= len; jj++){
           Char c = OldStr[jj];
           if (c == '\"') break;
           OldFullPath += c;
@@ -431,7 +433,7 @@ void __fastcall TFormMain::CopyOrMoveProject(bool bMove, bool bUseExistingProjec
           pSlSourceNoExist->Add(OldFullPath);
 
         if (OldFullPath != NewFullPath){
-          String sNewLine = OldStr.SubString(1, Pos1+10-1);
+          String sNewLine = OldStr.SubString(1, Pos1+XMLFILEPATH_LENGTH-1);
           sNewLine += XmlEncode(NewFullPath);
           sNewLine += OldStr.SubString(jj, OldStr.Length());
           Memo1->Lines->Strings[ii] = sNewLine;
@@ -543,7 +545,7 @@ int __fastcall TFormMain::GetValidPathCount(int iFilePathCount)
       {
         String OldPath;
         String OldStr = Memo1->Lines->Strings[ii];
-        int Pos1 = OldStr.Pos("filePath=\"");
+        int Pos1 = OldStr.Pos(XMLFILEPATH);
         if (Pos1 == 0)
           continue;
 
@@ -552,7 +554,7 @@ int __fastcall TFormMain::GetValidPathCount(int iFilePathCount)
         // get the old path and find the trailing quote
         int len = OldStr.Length();
         int jj;
-        for (jj = Pos1+10; jj <= len; jj++)
+        for (jj = Pos1+XMLFILEPATH_LENGTH; jj <= len; jj++)
         {
           Char c = OldStr[jj];
           if (c == '\"') break;
@@ -585,7 +587,7 @@ int __fastcall TFormMain::GetFilePathCount()
   for(int ii = 0; ii < Memo1->Lines->Count; ii++){
     String OldFullPath;
     String OldStr = Memo1->Lines->Strings[ii];
-    int Pos1 = OldStr.Pos("filePath=\"");
+    int Pos1 = OldStr.Pos(XMLFILEPATH);
     if (Pos1 != 0)
       iFilepathCount++;
   }
@@ -606,14 +608,14 @@ String __fastcall TFormMain::GetCommonPath()
     for(int ii = 0 ; ii < iCount ; ii++){
       String OldPath;
       String OldStr = Memo1->Lines->Strings[ii];
-      int Pos1 = OldStr.Pos("filePath=\"");
+      int Pos1 = OldStr.Pos(XMLFILEPATH);
       if (Pos1 == 0)
         continue;
 
       // get the old path and find the trailing quote
       int len = OldStr.Length();
       int jj;
-      for (jj = Pos1+10; jj <= len; jj++){
+      for (jj = Pos1+XMLFILEPATH_LENGTH; jj <= len; jj++){
         Char c = OldStr[jj];
         if (c == '\"') break;
         OldPath += c;
@@ -669,10 +671,15 @@ void __fastcall TFormMain::ButtonHelpClick(TObject *Sender)
       "of the media files in your movie. This app solves that problem!\n\n"
       "Use the 1,2,3,4 button steps when you have an old Windows Live Movie Maker project "
       "that no longer works because your media files have moved.\n\n"
-      "Additionally, \"Tools->Copy/Move project to new folder\" lets you move a working project, "
-      "perhaps using media files located in many places on your computer, and consolidate/copy "
+      "Use \"Tools->Copy/Move project to new folder\" to copy/move a working project, "
+      "perhaps using media files located in many places on your computer, and copy/move "
       "all of those media files into a single folder. Then you can save the new project "
-      "file anywhere.";
+      "file anywhere.\n\n"
+      "(Hint: you can drag/drop multiple media-folders, one at a time. These folders will "
+      "be searched for files referenced in your .wlmp project-file. Each folder's "
+      "sub-folders are also searched. Press \"Reset\" to clear the list of folders. "
+      "When you hover the mouse over the folders-label at the bottom, the full list of "
+      "folder-paths appears.)";
   ShowMessage(sHelp);
 }
 //---------------------------------------------------------------------------
