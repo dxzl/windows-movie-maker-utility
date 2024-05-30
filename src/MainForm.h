@@ -88,6 +88,7 @@ private:  // User declarations
   String __fastcall RecurseFind(String sPath, String sFile);
   String __fastcall AddMediaFolderPath(String sCaption);
   bool __fastcall ApplyRootPath(int iFilePathCount, String sRootPath, TStringList* slMissingFiles);
+  void __fastcall AddNewMediaFolderPath(String sPath);
   int __fastcall GetValidPathCount(int iFilePathCount);
   String __fastcall BrowseForFolder(HWND hwnd, String sTitle, String sFolder);
 //  bool __fastcall GetListsOfFilesDirsInCurrentDir(TStringList *slFiles, TStringList *slDirs);

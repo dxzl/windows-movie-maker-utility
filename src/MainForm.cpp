@@ -720,11 +720,7 @@ String __fastcall TFormMain::AddMediaFolderPath(String sCaption)
 
   sNewPath = IncludeTrailingPathDelimiter(sNewPath);
 
-  pSlMediaFolderPaths->Add(sNewPath);
-  LabelMediaFolderPath->Caption = "Media-folder (" +
-                    String(pSlMediaFolderPaths->Count) +
-                                          "): \"" + sNewPath + "\"";
-  LabelMediaFolderPath->Hint = pSlMediaFolderPaths->Text;
+  AddNewMediaFolderPath(sNewPath);
 
   return sNewPath;
 }
@@ -824,10 +820,7 @@ void __fastcall TFormMain::WMDropFile(TWMDropFiles &Msg)
                   else{ // is it a directory? (then must be the folder that has our photos and video clips!)
                     if (DirectoryExists(sFile)){
                       // handle drag-drop of the folder with video clips and photos
-                      String sNewFolder = IncludeTrailingPathDelimiter(sFile);
-                      pSlMediaFolderPaths->Add(sNewFolder);
-                      LabelMediaFolderPath->Caption = "Media-files: \"" + sNewFolder + "\"";
-                      LabelMediaFolderPath->Hint = pSlMediaFolderPaths->Text;
+                      AddNewMediaFolderPath(IncludeTrailingPathDelimiter(sFile));
                     }
                   }
               }
@@ -837,6 +830,15 @@ void __fastcall TFormMain::WMDropFile(TWMDropFiles &Msg)
     __finally{
       try { if (wBuf != NULL) delete [] wBuf; } catch(...) {}
     }
+}
+//---------------------------------------------------------------------------
+void __fastcall TFormMain::AddNewMediaFolderPath(String sPath)
+{
+  pSlMediaFolderPaths->Add(sPath);
+  LabelMediaFolderPath->Caption = "Media-folder (" +
+                    String(pSlMediaFolderPaths->Count) +
+                                          "): \"" + sPath + "\"";
+  LabelMediaFolderPath->Hint = pSlMediaFolderPaths->Text;
 }
 //---------------------------------------------------------------------------
 void __fastcall TFormMain::LoadFile(void)
